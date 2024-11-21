@@ -5,7 +5,7 @@
     <link name="main_link">
 
       <collision name="collision">
-        <pose>0 0 0 0 0 0</pose>
+        <pose>-0,251207 1,730364 0.00 0 0 0</pose>
         <geometry>
           <mesh>
             <scale>1.0 1.0 1.0</scale>
@@ -23,7 +23,7 @@
       </collision>
 
       <visual name="visual">
-        <pose>0 0 0.01 0 0 0</pose>
+        <pose>-0,251207 1,730364 0.01 0 0 0</pose>
         <geometry>
           <mesh>
             <scale>1.0 1.0 1.0</scale>
