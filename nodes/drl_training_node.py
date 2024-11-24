@@ -18,7 +18,6 @@ from src.tl_environment import Env
 
 def drl(env: Env, agent: DQNAgent, cfg):
 
-    summary_writer = MetricsWriter(cfg)
     start_time = time.time()
 
     if not os.path.isdir("keras_models"):
@@ -36,6 +35,7 @@ def drl(env: Env, agent: DQNAgent, cfg):
             action = agent.get_action(state)
 
             next_state, reward, done = env.step(action)
+
             agent.append_memory(state, action, reward, next_state, done)
 
             # Minimum memory size to start training.
@@ -80,10 +80,10 @@ def drl(env: Env, agent: DQNAgent, cfg):
                     average_reward=np.average(agent.memory[2]),
                     max_reward=np.max(agent.memory[2]),
                     min_reward=np.min(agent.memory[2]),
-                    loss=np.average(agent.memory[5]),
+                    loss=np.average(agent.loss_memory),
                 )
 
-        agent.epsilon = max(agent.epsilon * agent.epsilon_decay, agent.epsilon_min)
+        agent.epsilon = max(agent.epsilon * agent.epsilon_decay, agent.min_epsilon)
 
 
 if __name__ == "__main__":
@@ -100,7 +100,9 @@ if __name__ == "__main__":
     rospy.set_param("log_level", log_level)
     rospy.init_node("drl_training", log_level=rospy.DEBUG, anonymous=True)
 
+    summary_writer = MetricsWriter(cfg)
+
     env = Env()
-    drl_training = DQNAgent(env.state_size, env.action_size, cfg)
+    drl_training = DQNAgent(env.state_size, env.action_size, cfg, summary_writer)
 
     drl(env, drl_training, cfg)

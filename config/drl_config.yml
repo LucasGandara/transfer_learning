@@ -17,22 +17,10 @@ aggregate_stats_every: 10
 epsilon: 1
 epsilon_decay: 0.995
 min_epsilon: 0.1
-
-REPLAY_MEMORY_SIZE: 5000
-MIN_REPLAY_MEMORY_SIZE: 1000
-MINIBATCH_SIZE: 16
-PREDICTION_BATCH_SIZE: 1
-TRAINING_BATCH_SIZE: 4
-UPDATE_TARGET_EVERY: 5
-MODEL_NAME: TL_CARLA
-MIN_REWARD: -200
-DISCOUNT: 0.99
-EPSILON: 0.6
-EPSILON_DECAY: 0.99975
-MIN_EPSILON: 0.1
+discount_factor: 0.99
 
 # Logs
-tesnorboard_base_log_dir: logs
+tensorboard_base_log_dir: logs
 SHOW_QS_VALUES: true
 
 # Miscelanious

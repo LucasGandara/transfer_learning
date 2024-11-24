@@ -33,9 +33,11 @@ class DQNAgent(object):
         self.batch_size = self.cfg["batch_size"]
         self.epsilon = self.cfg["epsilon"]
         self.epsilon_decay = self.cfg["epsilon_decay"]
-        self.epsilon_min = self.cfg["epsilon_min"]
-        self.memory = deque(maxlen=1000000)
+        self.min_epsilon = self.cfg["min_epsilon"]
+        self.memory = deque(maxlen=1_000_000)
+        self.loss_memory = deque(maxlen=1_000_000)
         self.metrics = None
+        self.discount_factor = self.cfg["discount_factor"]
 
         self.model = self.build_model("off_model")
         self.target_model = self.build_model("target_model")
@@ -76,17 +78,23 @@ class DQNAgent(object):
 
         return model
 
+    def get_qvalue(self, reward, next_target, done):
+        if done:
+            return reward
+        else:
+            return reward + self.discount_factor * np.amax(next_target)
+
     def get_action(self, state):
         if np.random.rand() <= self.epsilon:
             self.q_value = np.zeros(self.action_size)
             return random.randrange(self.action_size)
         else:
-            q_value = self.model.predict(state.reshape(1, len(state)))
+            q_value = self.model.predict(state.reshape(1, len(state)), verbose=0)
             self.q_value = q_value
             return np.argmax(q_value[0])
 
-    def append_memory(self, state, action, reward, next_state, done, loss):
-        self.memory.append((state, action, reward, next_state, done, loss))
+    def append_memory(self, state, action, reward, next_state, done):
+        self.memory.append((state, action, reward, next_state, done))
 
     def train_model(self, target=False):
         mini_batch = random.sample(self.memory, self.batch_size)
@@ -100,19 +108,19 @@ class DQNAgent(object):
             next_states = mini_batch[i][3]
             dones = mini_batch[i][4]
 
-            self.q_value = self.model.predict(states.reshape(1, len(states)))
+            self.q_value = self.model.predict(states.reshape(1, len(states)), verbose=0)
 
             if target:
                 next_target = self.target_model.predict(
-                    next_states.reshape(1, len(next_states))
+                    next_states.reshape(1, len(next_states)), verbose=0
                 )
 
             else:
                 next_target = self.model.predict(
-                    next_states.reshape(1, len(next_states))
+                    next_states.reshape(1, len(next_states)), verbose=0
                 )
 
-            next_q_value = self.getQvalue(rewards, next_target, dones)
+            next_q_value = self.get_qvalue(rewards, next_target, dones)
 
             X_batch = np.append(X_batch, np.array([states.copy()]), axis=0)
             Y_sample = self.q_value.copy()
@@ -129,3 +137,5 @@ class DQNAgent(object):
         metrics = self.model.fit(
             X_batch, Y_batch, batch_size=self.batch_size, epochs=1, verbose=0
         )
+
+        self.loss_memory.append(metrics.history["loss"][0])
