@@ -6,6 +6,7 @@
         "/opt/ros/noetic/lib/python3/dist-packages"
     ],
     "cSpell.words": [
+        "amax",
         "dones",
         "goalbox",
         "lecun",
@@ -18,6 +19,6 @@
         "Respawn",
         "rospy",
         "srvs",
-        "tesnorboard"
+        "tensorboard"
     ]
 }

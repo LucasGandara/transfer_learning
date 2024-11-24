@@ -13,7 +13,7 @@ from geometry_msgs.msg import Pose
 
 class RespawnGoal(object):
     """This should work as an API to replace goal box model into Gazebo and set
-    goal postion."""
+    goal position."""
 
     def __init__(self):
         model_path = os.path.dirname(os.path.realpath(__file__))

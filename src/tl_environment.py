@@ -24,6 +24,7 @@ class Env(object):
         self.state_size = 28
         self.action_size = 5
 
+        self.get_goalbox = False
         self.init_goal = True  # First time the Goal is initialized
 
         # Node publisher
@@ -85,13 +86,13 @@ class Env(object):
         if done:
             rospy.loginfo("Collision!!")
             reward = -500
-            self.pub_cmd_vel.publish(Twist())
+            self.cmd_vel_publisher.publish(Twist())
 
         if self.get_goalbox:
             rospy.loginfo("Goal!!!! +1000 reward!!")
             reward = 1000
-            self.pub_cmd_vel.publish(Twist())
-            self.goal_x, self.goal_y = self.respawn_goal.getPosition(True, delete=True)
+            self.cmd_vel_publisher.publish(Twist())
+            self.goal_x, self.goal_y = self.respawn_goal.get_position(True, delete=True)
             self.goal_distance = self.get_goal_distance()
             self.get_goalbox = False
 
@@ -133,7 +134,7 @@ class Env(object):
         cmd_vel = Twist()
         cmd_vel.linear.x = 0.15
         cmd_vel.angular.z = ang_vel
-        self.pub_cmd_vel.publish(cmd_vel)
+        self.cmd_vel_publisher.publish(cmd_vel)
 
         data = None
 
@@ -144,7 +145,7 @@ class Env(object):
                 pass
 
         state, done = self.get_state(data)
-        reward = self.set_reward(state, done, action)
+        reward = self.get_reward(state, done, action)
 
         return np.asarray(state), reward, done
 
@@ -168,6 +169,8 @@ class Env(object):
 
         self.goal_distance = self.get_goal_distance()
         state, done = self.get_state(data)
+
+        return np.asarray(state)
 
 
 if __name__ == "__main__":
