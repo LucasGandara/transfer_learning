@@ -1,0 +1,39 @@
+# start or keep
+load_model: false
+model_name: dqn_tb3
+
+# Env
+CARLA_TIMEOUT: 20.0
+
+# DRL Agent
+learning_rate: 0.001
+batch_size: 64
+current_episode: 0
+num_episodes: 10
+episode_step: 10000
+update_target_every: 1000
+save_model_every: 500
+aggregate_stats_every: 10
+epsilon: 1
+epsilon_decay: 0.995
+min_epsilon: 0.1
+
+REPLAY_MEMORY_SIZE: 5000
+MIN_REPLAY_MEMORY_SIZE: 1000
+MINIBATCH_SIZE: 16
+PREDICTION_BATCH_SIZE: 1
+TRAINING_BATCH_SIZE: 4
+UPDATE_TARGET_EVERY: 5
+MODEL_NAME: TL_CARLA
+MIN_REWARD: -200
+DISCOUNT: 0.99
+EPSILON: 0.6
+EPSILON_DECAY: 0.99975
+MIN_EPSILON: 0.1
+
+# Logs
+tesnorboard_base_log_dir: logs
+SHOW_QS_VALUES: true
+
+# Miscelanious
+log_level: DEBUG

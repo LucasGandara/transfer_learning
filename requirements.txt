@@ -1,0 +1,5 @@
+# Python version == 3.9.20
+numpy==2.0.2
+torch==2.5.1
+keras==3.6.0
+tensorflow==2.18.0

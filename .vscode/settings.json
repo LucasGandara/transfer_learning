@@ -4,5 +4,20 @@
     ],
     "python.analysis.extraPaths": [
         "/opt/ros/noetic/lib/python3/dist-packages"
+    ],
+    "cSpell.words": [
+        "dones",
+        "goalbox",
+        "lecun",
+        "logdebug",
+        "logerr",
+        "loginfo",
+        "MINIBATCH",
+        "Odometry",
+        "Qvalue",
+        "Respawn",
+        "rospy",
+        "srvs",
+        "tesnorboard"
     ]
 }
