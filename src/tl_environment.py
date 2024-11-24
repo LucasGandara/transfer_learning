@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Authors: Lucas G. #
 
 import math
@@ -11,7 +11,7 @@ from sensor_msgs.msg import LaserScan
 from std_srvs.srv import Empty
 from tf.transformations import euler_from_quaternion
 
-from respawn_goal import RespawnGoal
+from src.respawn_goal import RespawnGoal
 
 
 class Env(object):
@@ -21,7 +21,10 @@ class Env(object):
         self.heading = 0
         self.position = Pose()
 
-        self.initGoal = True  # First time the Goal is initialized
+        self.state_size = 28
+        self.action_size = 5
+
+        self.init_goal = True  # First time the Goal is initialized
 
         # Node publisher
         self.cmd_vel_publisher = rospy.Publisher("cmd_vel", Twist, queue_size=5)
@@ -30,8 +33,6 @@ class Env(object):
         rospy.Subscriber("odom", Odometry, self.odom_callback)
         self.reset_proxy = rospy.ServiceProxy("gazebo/reset_simulation", Empty)
         self.respawn_goal = RespawnGoal()
-
-        rospy.spin()
 
     def odom_callback(self, odom: Odometry):
         self.position = odom.pose.pose.position
@@ -87,7 +88,7 @@ class Env(object):
             self.pub_cmd_vel.publish(Twist())
 
         if self.get_goalbox:
-            rospy.loginfo("Goal!!! Yiihaaa! +1000 reward!!")
+            rospy.loginfo("Goal!!!! +1000 reward!!")
             reward = 1000
             self.pub_cmd_vel.publish(Twist())
             self.goal_x, self.goal_y = self.respawn_goal.getPosition(True, delete=True)
@@ -142,13 +143,13 @@ class Env(object):
             except:
                 pass
 
-        state, done = self.getState(data)
+        state, done = self.get_state(data)
         reward = self.set_reward(state, done, action)
 
         return np.asarray(state), reward, done
 
     def reset(self):
-        rospy.wait_for_service("gazebo/reset-simulation")
+        rospy.wait_for_service("/gazebo/reset_simulation", timeout=2)
         try:
             self.reset_proxy()
         except rospy.ServiceException as error:
@@ -161,14 +162,15 @@ class Env(object):
             except:
                 pass
 
-        if self.initGoal:
-            self.goal_x, self.goal_y = self.respawn_goal.getPosition()
-            self.initGoal = False
+        if self.init_goal:
+            self.goal_x, self.goal_y = self.respawn_goal.get_position()
+            self.init_goal = False
 
         self.goal_distance = self.get_goal_distance()
-        state, done = self.getState(data)
+        state, done = self.get_state(data)
 
 
 if __name__ == "__main__":
     rospy.init_node("tl_environment", anonymous=True)
     env = Env()
+    env.reset()
