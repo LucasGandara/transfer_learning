@@ -4,27 +4,72 @@
 import os
 import sys
 
+os.environ["KERAS_BACKEND"] = "tensorflow"
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-os.environ["KERAS_BACKEND"] = "torch"
 
-import random
+import datetime
 from collections import deque
 
 import keras
 import numpy as np
+import tensorflow as tf
 
-from src.summary_writer import MetricsWriter
+print("Keras version:", keras.__version__)
+print("Keras backend:", keras.backend.backend())  # tensorflow
+assert keras.backend.backend() == "tensorflow"
+print("TensorFlow version:", tf.__version__)
+
+
+class ReplayBuffer(object):
+    def __init__(self, max_size, input_shape, n_actions, discrete=False):
+        self.mem_size = max_size
+        self.mem_counter = 0
+        self.discrete = discrete
+        self.state_memory = np.zeros((self.mem_size, input_shape))
+        self.new_state_memory = np.zeros((self.mem_size, input_shape))
+        dtype = np.int8 if self.discrete else np.float32
+        self.action_memory = np.zeros((self.mem_size, n_actions), dtype=dtype)
+        self.reward_memory = np.zeros(self.mem_size)
+        self.terminal_memory = np.zeros(self.mem_size, dtype=np.float32)
+
+    def store_transition(self, state, action, reward, state_, done):
+        index = self.mem_counter % self.mem_size
+        self.state_memory[index] = state
+        self.new_state_memory[index] = state_
+        # store one hot encoding of actions, if appropriate
+        if self.discrete:
+            actions = np.zeros(self.action_memory.shape[1])
+            actions[action] = 1.0
+            self.action_memory[index] = actions
+        else:
+            self.action_memory[index] = action
+        self.reward_memory[index] = reward
+        self.terminal_memory[index] = 1 - done
+        self.mem_counter += 1
+
+    def sample_buffer(self, batch_size):
+        max_mem = min(self.mem_counter, self.mem_size)
+        batch = np.random.choice(max_mem, batch_size)
+
+        states = self.state_memory[batch]
+        actions = self.action_memory[batch]
+        rewards = self.reward_memory[batch]
+        states_ = self.new_state_memory[batch]
+        terminal = self.terminal_memory[batch]
+
+        return states, actions, rewards, states_, terminal
 
 
 # TODO: Delete Goal on shutdown
 class DQNAgent(object):
-    def __init__(
-        self, state_size: int, action_size: int, cfg, summary_writer: MetricsWriter
-    ):
+    def __init__(self, state_size: int, action_size: int, cfg):
         self.cfg = cfg
 
         # Logs
-        self.summary_writer = summary_writer
+        date_time = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
+        self.log_dir = f"{self.cfg['base_log_dir']}/dqn_{date_time}"
+        print(f"Logging metrics to {self.log_dir}")
+        self.summary_writer = tf.summary.create_file_writer(self.log_dir)
 
         # RL Agent
         self.state_size = state_size
@@ -34,25 +79,36 @@ class DQNAgent(object):
         self.epsilon = self.cfg["epsilon"]
         self.epsilon_decay = self.cfg["epsilon_decay"]
         self.min_epsilon = self.cfg["min_epsilon"]
-        self.memory = deque(maxlen=1_000_000)
+        self.memory = ReplayBuffer(
+            self.cfg["memory_size"],
+            self.state_size,
+            self.action_size,
+            discrete=True,
+        )
         self.loss_memory = deque(maxlen=1_000_000)
         self.metrics = None
         self.discount_factor = self.cfg["discount_factor"]
+        self.train_epochs = 0
 
-        self.model = self.build_model("off_model")
-        self.target_model = self.build_model("target_model")
-
-        self.update_target_model()
+        if self.cfg["load_model"]:
+            self.model = keras.saving.load_model(cfg["model_save_path"])
+            self.target_model = keras.saving.load_model(cfg["model_save_path"])
+        else:
+            self.model = self.build_model("actor_model")
+            self.target_model = self.build_model("target_model")
+            self.update_target_model()
 
     def update_target_model(self):
         self.target_model.set_weights(self.model.get_weights())
+
+    def save_model(self):
+        self.target_model.save(self.cfg["model_save_path"])
 
     def build_model(self, name: str):
         model = keras.models.Sequential(
             [
                 keras.layers.Dense(
                     64,
-                    input_shape=(self.state_size,),
                     activation="relu",
                     kernel_initializer="lecun_uniform",
                 ),
@@ -63,7 +119,7 @@ class DQNAgent(object):
                 keras.layers.Dense(
                     self.action_size, kernel_initializer="lecun_uniform"
                 ),
-                keras.layers.Activation("linear"),
+                keras.layers.Activation(None),
             ],
             name=f"DQN_{name}",
         )
@@ -85,57 +141,59 @@ class DQNAgent(object):
             return reward + self.discount_factor * np.amax(next_target)
 
     def get_action(self, state):
-        if np.random.rand() <= self.epsilon:
-            self.q_value = np.zeros(self.action_size)
-            return random.randrange(self.action_size)
+        state = state[np.newaxis, :]
+        random_number = np.random.random()
+        if random_number <= self.epsilon:
+            return np.random.choice(self.action_size)
         else:
-            q_value = self.model.predict(state.reshape(1, len(state)), verbose=0)
-            self.q_value = q_value
-            return np.argmax(q_value[0])
+            actions = self.model.predict(state, verbose=0)
+            action = np.argmax(actions)
 
-    def append_memory(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done))
+        return action
+
+    def append_memory(self, state, action, reward, new_state, done):
+        self.memory.store_transition(state, action, reward, new_state, done)
 
     def train_model(self, target=False):
-        mini_batch = random.sample(self.memory, self.batch_size)
-        X_batch = np.empty((0, self.state_size), dtype=np.float64)
-        Y_batch = np.empty((0, self.action_size), dtype=np.float64)
+        loss = 0
+        if self.memory.mem_counter > self.batch_size:
+            self.train_epochs += 1
 
-        for i in range(self.batch_size):
-            states = mini_batch[i][0]
-            actions = mini_batch[i][1]
-            rewards = mini_batch[i][2]
-            next_states = mini_batch[i][3]
-            dones = mini_batch[i][4]
+            state, action, reward, new_state, done = self.memory.sample_buffer(
+                self.batch_size
+            )
 
-            self.q_value = self.model.predict(states.reshape(1, len(states)), verbose=0)
+            action_values = np.array(self.action_size, dtype=np.int8)
+            # action_indices = np.dot(action, action_values)
+            action_indices = np.argmax(action, axis=1)
 
-            if target:
-                next_target = self.target_model.predict(
-                    next_states.reshape(1, len(next_states)), verbose=0
-                )
+            q_eval = self.model.predict(state, verbose=0)
 
-            else:
-                next_target = self.model.predict(
-                    next_states.reshape(1, len(next_states)), verbose=0
-                )
+            q_next = self.target_model.predict(new_state, verbose=0)
 
-            next_q_value = self.get_qvalue(rewards, next_target, dones)
+            q_target = q_eval.copy()
 
-            X_batch = np.append(X_batch, np.array([states.copy()]), axis=0)
-            Y_sample = self.q_value.copy()
+            batch_index = np.arange(self.batch_size, dtype=np.int32)
 
-            Y_sample[0][actions] = next_q_value
-            Y_batch = np.append(Y_batch, np.array([Y_sample[0]]), axis=0)
+            q_target[batch_index, action_indices] = (
+                reward + self.cfg["gamma"] * np.max(q_next, axis=1) * done
+            )
 
-            if dones:
-                X_batch = np.append(X_batch, np.array([next_states.copy()]), axis=0)
-                Y_batch = np.append(
-                    Y_batch, np.array([[rewards] * self.action_size]), axis=0
-                )
+            history = self.model.fit(state, q_target, verbose=0)
 
-        metrics = self.model.fit(
-            X_batch, Y_batch, batch_size=self.batch_size, epochs=1, verbose=0
-        )
+            self.epsilon = (
+                self.epsilon * self.epsilon_decay
+                if self.epsilon > self.min_epsilon
+                else self.min_epsilon
+            )
 
-        self.loss_memory.append(metrics.history["loss"][0])
+            loss = history.history["loss"][0]
+            self.loss_memory.append(loss)
+
+        if (
+            self.train_epochs > 30
+            and self.train_epochs % self.cfg["update_target_every"] == 0
+        ):
+            self.target_model.set_weights(self.model.get_weights())
+
+        return loss

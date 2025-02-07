@@ -14,7 +14,7 @@ import rostest
 from gazebo_msgs.msg import ModelStates
 from geometry_msgs.msg import Twist
 
-from src.tl_environment import Env
+from src.tb3_environment import Env
 
 
 class TestTlEnvironment(unittest.TestCase):
