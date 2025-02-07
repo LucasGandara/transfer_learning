@@ -1,5 +1,5 @@
 # start or keep
-load_model: false
+load_model: true
 model_name: dqn_tb3
 
 # Env
@@ -8,20 +8,23 @@ CARLA_TIMEOUT: 20.0
 # DRL Agent
 learning_rate: 0.001
 batch_size: 64
-current_episode: 0
-num_episodes: 10
-episode_step: 10000
-update_target_every: 1000
-save_model_every: 500
+current_episode: 550
+num_episodes: 200
+episode_step: 500
+update_target_every: 20
+save_model_every: 30
 aggregate_stats_every: 10
+gamma: 0.99
 epsilon: 1
 epsilon_decay: 0.995
 min_epsilon: 0.1
 discount_factor: 0.99
+memory_size: 1000000
 
 # Logs
-tensorboard_base_log_dir: logs
+base_log_dir: logs
+model_save_path: keras_models/dqn_tb3.keras
 SHOW_QS_VALUES: true
 
 # Miscelanious
-log_level: DEBUG
+log_level: INFO

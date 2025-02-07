@@ -93,8 +93,8 @@ class RespawnGoal(object):
             self.delete_model()
 
         while position_check:
-            goal_x_list = [0.6, 1.9, 0.5, 0.2, -0.8]
-            goal_y_list = [0, -0.5, -1.9, 1.5, -0.9, 1]
+            goal_x_list = [0.6, 1.417391, 1.401859, 1.462461, -1.317352, -1.418565]
+            goal_y_list = [0, -1.431744, 1.412536, 0.018048, 1.486956, -1.403180]
 
             self.index = random.randrange(0, len(goal_x_list))
             rospy.loginfo("Goal position updating to: ...")
