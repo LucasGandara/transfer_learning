@@ -12,7 +12,8 @@ import numpy as np
 import rospy
 import tensorflow as tf
 import yaml
-from dqn_agent import DQNAgent
+
+from nodes.ddpg_agent import DQNAgent
 
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 from src.tb3_environment import Env

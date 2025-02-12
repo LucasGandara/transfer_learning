@@ -87,40 +87,35 @@
       <elevation>0</elevation>
       <heading_deg>0</heading_deg>
     </spherical_coordinates>
-    <model name='main_track_1'>
+    <model name='main_track'>
       <static>1</static>
-      <link name='main_link'>
+      <link name='link'>
         <collision name='collision'>
-          <pose>0 0 0 0 -0 0</pose>
           <geometry>
             <mesh>
               <scale>1 1 1</scale>
-              <uri>model://main_track_1/meshes/main_track.dae</uri>
+              <uri>model://main_track/mesh/main_track.dae</uri>
             </mesh>
           </geometry>
+          <max_contacts>10</max_contacts>
           <surface>
-            <friction>
-              <ode>
-                <mu>0.01</mu>
-                <mu2>0.01</mu2>
-              </ode>
-              <torsional>
-                <ode/>
-              </torsional>
-            </friction>
             <contact>
               <ode/>
             </contact>
             <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
           </surface>
-          <max_contacts>10</max_contacts>
         </collision>
         <visual name='visual'>
-          <pose>0 0 0.01 0 -0 0</pose>
           <geometry>
             <mesh>
               <scale>1 1 1</scale>
-              <uri>model://main_track_1/meshes/main_track.dae</uri>
+              <uri>model://main_track/mesh/main_track.dae</uri>
             </mesh>
           </geometry>
         </visual>
@@ -128,13 +123,127 @@
         <enable_wind>0</enable_wind>
         <kinematic>0</kinematic>
       </link>
-      <pose>0.073177 -0.007375 0 0 -0 0</pose>
+      <pose>0.004905 0.032015 0 0 -0 0</pose>
+    </model>
+    <model name='main_track_0'>
+      <static>1</static>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <scale>1 1 1</scale>
+              <uri>model://roundabout/mesh/roundabout.dae</uri>
+            </mesh>
+          </geometry>
+          <max_contacts>10</max_contacts>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <scale>1 1 1</scale>
+              <uri>model://roundabout/mesh/roundabout.dae</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose>5.38931 -0.020406 0 0 -0 0</pose>
+    </model>
+    <model name='main_track_1'>
+      <static>1</static>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <scale>1 1 1</scale>
+              <uri>model://main_track/mesh/main_track.dae</uri>
+            </mesh>
+          </geometry>
+          <max_contacts>10</max_contacts>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <scale>1 1 1</scale>
+              <uri>model://main_track/mesh/main_track.dae</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose>7.75136 0.019315 0 0 -0 0</pose>
+    </model>
+    <model name='main_track_2'>
+      <static>1</static>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <scale>1 1 1</scale>
+              <uri>model://delimiters/mesh/delimiters.dae</uri>
+            </mesh>
+          </geometry>
+          <max_contacts>10</max_contacts>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <scale>1 1 1</scale>
+              <uri>model://delimiters/mesh/delimiters.dae</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+      <pose>-0.111954 -2.64451 0 0 -0 0</pose>
     </model>
     <state world_name='default'>
-      <sim_time>24 406000000</sim_time>
-      <real_time>82 98239014</real_time>
-      <wall_time>1732082302 650754872</wall_time>
-      <iterations>24406</iterations>
+      <sim_time>251 322000000</sim_time>
+      <real_time>251 757104157</real_time>
+      <wall_time>1739380470 895716836</wall_time>
+      <iterations>251322</iterations>
       <model name='ground_plane'>
         <pose>0 0 0 0 -0 0</pose>
         <scale>1 1 1</scale>
@@ -145,11 +254,41 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name='main_track_1'>
-        <pose>0.073177 -0.007375 0 0 -0 0</pose>
+      <model name='main_track'>
+        <pose>0.004905 0.032015 0 0 -0 0</pose>
         <scale>1 1 1</scale>
-        <link name='main_link'>
-          <pose>0.073177 -0.007375 0 0 -0 0</pose>
+        <link name='link'>
+          <pose>0.004905 0.032015 0 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='main_track_0'>
+        <pose>5.37641 0.032 0 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose>5.37641 0.032 0 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='main_track_1'>
+        <pose>7.75136 0.019315 0 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose>7.75136 0.019315 0 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='main_track_2'>
+        <pose>-0.111954 -2.64451 0 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link'>
+          <pose>-0.111954 -2.64451 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
@@ -161,7 +300,7 @@
     </state>
     <gui fullscreen='0'>
       <camera name='user_camera'>
-        <pose>5 -5 2 0 0.275643 2.35619</pose>
+        <pose>14.4624 -11.6105 13.0398 0 0.677796 2.15217</pose>
         <view_controller>orbit</view_controller>
         <projection_type>perspective</projection_type>
       </camera>
