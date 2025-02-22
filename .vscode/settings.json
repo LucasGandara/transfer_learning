@@ -19,7 +19,9 @@
         "Qvalue",
         "Respawn",
         "rospy",
+        "RVIZ",
         "srvs",
-        "tensorboard"
+        "tensorboard",
+        "Turtlebot"
     ]
 }
