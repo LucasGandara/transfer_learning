@@ -22,7 +22,7 @@ class Env(object):
         self.position = Pose()
 
         self.state_size = 28
-        self.action_size = 5
+        self.action_size = 1
 
         self.get_goalbox = False
         self.init_goal = True  # First time the Goal is initialized
@@ -61,36 +61,24 @@ class Env(object):
 
         return goal_distance
 
-    def get_reward(self, state, done, action):
-        yaw_reward = []
-        obstacle_min_range = state[-2]
+    def get_reward(self, state, done):
         current_distance = state[-3]
-        heading = state[-4]
+        heading = abs(state[-4])
 
-        for i in range(5):
-            angle = -math.pi / 4 + heading + (math.pi / 8 * i) + math.pi / 2
-            tr = 1 - 4 * math.fabs(
-                0.5 - math.modf(0.25 + 0.5 * angle % (2 * math.pi) / math.pi)[0]
-            )
-            yaw_reward.append(tr)
+        heading = 3 - heading
 
         distance_rate = 2 ** (current_distance / self.goal_distance)
 
-        if obstacle_min_range < 0.2:
-            ob_reward = -5
-        else:
-            ob_reward = 0
-
-        reward = ((round(yaw_reward[action] * 5, 2)) * distance_rate) + ob_reward
+        reward = heading * distance_rate
 
         if done:
             rospy.loginfo("Collision!!")
-            reward = -150
+            reward = -200
             self.cmd_vel_publisher.publish(Twist())
 
         if self.get_goalbox:
             rospy.loginfo("Goal!!!! +1000 reward!!")
-            reward = 200
+            reward = 400
             self.cmd_vel_publisher.publish(Twist())
             self.goal_x, self.goal_y = self.respawn_goal.get_position(True, delete=True)
             self.goal_distance = self.get_goal_distance()
@@ -101,14 +89,14 @@ class Env(object):
     def get_state(self, scan):
         scan_range = []
         heading = self.heading
-        min_range = 0.13  # m: -> 13cm
+        min_range = 0.135  # m: -> 13cm
         done = False
 
         for i in range(len(scan.ranges)):
             if scan.ranges[i] == float("Inf"):
                 scan_range.append(3.5)
             elif np.isnan(scan.ranges[i]):
-                scan_range.append(0)
+                scan_range.append(0.0)
             else:
                 scan_range.append(scan.ranges[i])
 
@@ -128,8 +116,7 @@ class Env(object):
         )
 
     def step(self, action):
-        max_angular_vel = 1.5
-        ang_vel = ((self.action_size - 1) / 2 - action) * max_angular_vel * 0.5
+        ang_vel = action
 
         cmd_vel = Twist()
         cmd_vel.linear.x = 0.15
@@ -145,7 +132,7 @@ class Env(object):
                 pass
 
         state, done = self.get_state(data)
-        reward = self.get_reward(state, done, action)
+        reward = self.get_reward(state, done)
 
         return np.asarray(state), reward, done
 
