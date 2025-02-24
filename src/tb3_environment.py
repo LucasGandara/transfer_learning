@@ -11,15 +11,20 @@ from sensor_msgs.msg import LaserScan
 from std_srvs.srv import Empty
 from tf.transformations import euler_from_quaternion
 
+from src.consts import get_stage, get_stage_name
 from src.respawn_goal import RespawnGoal
 
 
 class Env(object):
-    def __init__(self):
+    def __init__(self, cfg):
+        self.cfg = cfg
+
         self.goal_x = 0
         self.goal_y = 0
         self.heading = 0
         self.position = Pose()
+
+        self.steps = 0
 
         self.state_size = 28
         self.action_size = 1
@@ -33,7 +38,10 @@ class Env(object):
         # Node subscriptions
         rospy.Subscriber("odom", Odometry, self.odom_callback)
         self.reset_proxy = rospy.ServiceProxy("gazebo/reset_simulation", Empty)
-        self.respawn_goal = RespawnGoal()
+
+        stage = get_stage(cfg["stage"])
+        rospy.loginfo("Environment stage: {}".format(get_stage_name(cfg["stage"])))
+        self.respawn_goal = RespawnGoal(stage)
 
     def odom_callback(self, odom: Odometry):
         self.position = odom.pose.pose.position
@@ -69,7 +77,11 @@ class Env(object):
 
         distance_rate = 2 ** (current_distance / self.goal_distance)
 
-        reward = heading * distance_rate
+        # Calculate decay factor based on steps
+        max_steps = self.cfg["max_steps_per_episode"]
+        decay_factor = max(0, 1 - (self.steps / max_steps))
+
+        reward = heading * distance_rate * decay_factor
 
         if done:
             rospy.loginfo("Collision!!")
@@ -83,6 +95,7 @@ class Env(object):
             self.goal_x, self.goal_y = self.respawn_goal.get_position(True, delete=True)
             self.goal_distance = self.get_goal_distance()
             self.get_goalbox = False
+            self.steps = 0
 
         return reward
 
@@ -105,6 +118,10 @@ class Env(object):
         if min_range > min(scan_range) > 0:
             done = True
 
+        if self.steps > self.cfg["max_steps_per_episode"]:
+            rospy.loginfo("Time out!!")
+            done = True
+
         current_distance = self.get_goal_distance()
         if current_distance < 0.2:
             self.get_goalbox = True
@@ -116,6 +133,7 @@ class Env(object):
         )
 
     def step(self, action):
+        self.steps += 1
         ang_vel = action
 
         cmd_vel = Twist()
@@ -156,6 +174,8 @@ class Env(object):
 
         self.goal_distance = self.get_goal_distance()
         state, done = self.get_state(data)
+
+        self.steps = 0
 
         return np.asarray(state)
 
