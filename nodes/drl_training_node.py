@@ -56,13 +56,11 @@ def ddpg(env: Env, agent: DDPGAgent, cfg):
         cfg["current_episode"] + 1, cfg["current_episode"] + cfg["num_episodes"]
     ):
         score = 0
-        steps = 0
         observation = env.reset()
         agent.actor_loss_memory = 0
         agent.critic_loss_memory = 0
 
         while True:
-            steps += 1
             action = agent.choose_action(
                 keras.ops.expand_dims(keras.ops.convert_to_tensor(observation), 0),
                 training=True,
@@ -74,9 +72,6 @@ def ddpg(env: Env, agent: DDPGAgent, cfg):
 
             agent.learn()
             agent.update_targets()
-
-            if steps >= 500:
-                done = True
 
             if done:
                 break
@@ -130,7 +125,7 @@ if __name__ == "__main__":
     rospy.loginfo(f"Log level: {log_level}")
     rospy.on_shutdown(on_shutdown)
 
-    env = Env()
+    env = Env(cfg)
     agent = DDPGAgent(env.state_size, env.action_size, cfg)
 
     ddpg(env, agent, cfg)

@@ -66,7 +66,7 @@ class DDPGAgent(object):
             self.target_actor = build_actor(
                 self.state_size, self.cfg["max_angular_vel"], "target_actor_model"
             )
-            self.target_criticcritic = build_critic(
+            self.target_critic = build_critic(
                 self.state_size, self.action_size, "target_critic_model"
             )
 

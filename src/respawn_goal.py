@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
-# Authors: Lucas G. #
+# Authors: Lucas G.
 
 import os
-import random
-import time
 
 import rospy
 from gazebo_msgs.msg import ModelStates
 from gazebo_msgs.srv import DeleteModel, SpawnModel
 from geometry_msgs.msg import Pose
 
+from src.consts import GOAL_X_LIST, GOAL_Y_LIST, Stage
+
 
 class RespawnGoal(object):
     """This should work as an API to replace goal box model into Gazebo and set
     goal position."""
 
-    def __init__(self):
+    def __init__(self, stage: Stage):
+        self.stage = stage
         model_path = os.path.dirname(os.path.realpath(__file__))
         model_path = model_path.replace(
             "transfer_learning/src", "transfer_learning/models/goal_box/model.sdf"
@@ -23,8 +24,8 @@ class RespawnGoal(object):
 
         self.goal_model = open(model_path, "r").read()
         self.goal_position = Pose()
-        self.init_goal_x = 2.833015
-        self.init_goal_y = -0.490867
+        self.init_goal_x = GOAL_X_LIST[self.stage][0]
+        self.init_goal_y = GOAL_Y_LIST[self.stage][0]
         self.goal_position.position.x = self.init_goal_x
         self.goal_position.position.y = self.init_goal_y
         self.goal_position.position.z = 0.11
@@ -95,37 +96,17 @@ class RespawnGoal(object):
             self.delete_model()
 
         while position_check:
-            goal_x_list = [
-                2.833015,
-                5.473178,
-                7.737311,
-                10.239666,
-                10.270091,
-                5.632256,
-                0.386172,
-                0.482948,
-            ]
-            goal_y_list = [
-                -0.490867,
-                -1.775312,
-                -0.471472,
-                -0.494202,
-                0.539621,
-                2.043752,
-                0.571205,
-                -0.440986,
-            ]
 
             self.goal_index += 1
-            if self.goal_index == len(goal_x_list):
+            if self.goal_index == len(GOAL_X_LIST[self.stage]):
                 self.goal_index = 0
 
             rospy.loginfo("Goal position updating to: ...")
             rospy.loginfo(
                 "Index: %d, X position: %d Y position: %d",
                 self.goal_index,
-                goal_x_list[self.goal_index],
-                goal_y_list[self.goal_index],
+                GOAL_X_LIST[self.stage][self.goal_index],
+                GOAL_Y_LIST[self.stage][self.goal_index],
             )
             if self.last_index == self.goal_index:
                 position_check = True
@@ -133,8 +114,8 @@ class RespawnGoal(object):
                 self.last_index = self.goal_index
                 position_check = False
 
-            self.goal_position.position.x = goal_x_list[self.goal_index]
-            self.goal_position.position.y = goal_y_list[self.goal_index]
+            self.goal_position.position.x = GOAL_X_LIST[self.stage][self.goal_index]
+            self.goal_position.position.y = GOAL_Y_LIST[self.stage][self.goal_index]
             self.goal_position.position.z = 0.11
 
         rospy.sleep(0.5)
