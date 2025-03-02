@@ -60,7 +60,7 @@ class RespawnGoal(object):
     def respawn_model(self):
         while True:
             if not self.check_model:
-                rospy.logdebug("Goal model not found, respawning...")
+                rospy.logdebug("Goal model not found, re-spawning...")
                 rospy.wait_for_service("gazebo/spawn_sdf_model")
                 spawn_model_prox = rospy.ServiceProxy(
                     "gazebo/spawn_sdf_model", SpawnModel

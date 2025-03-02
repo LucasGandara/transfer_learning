@@ -3,22 +3,54 @@ import os
 os.environ["KERAS_BACKEND"] = "tensorflow"
 
 import keras
+import tensorflow as tf
 
 
-def build_actor(n_states: int, upper_bound_action: int, name: str) -> keras.Model:
-    # Initialize weights between -3e-3 and 3-e3
-    last_init = keras.initializers.RandomUniform(minval=-0.003, maxval=0.003)
+class Actor(keras.Model):
+    def __init__(self, state_dim, action_dim, action_limit_v, action_limit_w, name):
+        super(Actor, self).__init__(name=name)
+        self.state_dim = state_dim
+        self.action_dim = action_dim
+        self.action_limit_v = action_limit_v
+        self.action_limit_w = action_limit_w
 
-    inputs = keras.layers.Input(shape=(n_states,), name="input_layer")
-    out = keras.layers.Dense(256, activation="relu", name="dense_1")(inputs)
-    out = keras.layers.Dense(256, activation="relu", name="dense_2")(out)
-    outputs = keras.layers.Dense(
-        1, activation="tanh", kernel_initializer=last_init, name="output_layer"
-    )(out)
+        # Custom initializer to match fanin_init behavior
+        initializer = keras.initializers.VarianceScaling(
+            scale=1.0 / 3.0, mode="fan_in", distribution="uniform"
+        )
 
-    # Our upper bound is 1.5 for robot velocity.
-    outputs = outputs * upper_bound_action
-    model = keras.Model(inputs, outputs, name="name")
+        # Layer definitions
+        self.fa1 = keras.layers.Dense(
+            500, activation="relu", kernel_initializer=initializer
+        )
+
+        self.fa2 = keras.layers.Dense(
+            500, activation="relu", kernel_initializer=initializer
+        )
+
+        self.fa3 = keras.layers.Dense(
+            action_dim,
+            kernel_initializer=keras.initializers.RandomUniform(
+                minval=-0.003, maxval=0.003
+            ),
+        )
+
+    def call(self, state):
+        x = self.fa1(state)
+        x = self.fa2(x)
+        action = self.fa3(x)
+
+        # Batch case
+        action_v = tf.sigmoid(action[..., 0:1]) * self.action_limit_v
+        action_w = tf.tanh(action[..., 1:2]) * self.action_limit_w
+
+        return tf.concat([action_v, action_w], axis=-1)
+
+
+def build_actor(
+    n_states: int, upper_bound_action_v: float, upper_bound_action_w: float, name: str
+) -> keras.Model:
+    model = Actor(n_states, 2, upper_bound_action_v, upper_bound_action_w, name)
     return model
 
 
@@ -28,22 +60,32 @@ def build_critic(
     name: str,
 ) -> keras.Model:
     ### Critic on the state - action pair. It should return a value of the pair
-    state_input = keras.layers.Input(shape=(state_dim,), name="state_input")
-    state_out = keras.layers.Dense(16, activation="relu", name="state_out")(state_input)
-    state_value = keras.layers.Dense(32, activation="relu", name="state_value")(
-        state_out
+
+    initializer = keras.initializers.VarianceScaling(
+        scale=1.0 / 3.0, mode="fan_in", distribution="uniform"
     )
 
-    action_input = keras.layers.Input(shape=(n_actions,), name="actin_input")
-    action_value = keras.layers.Dense(32, activation="relu", name="action_value")(
-        action_input
-    )
+    state_input = keras.layers.Input(shape=(state_dim,), name="state_input")
+    state_value = keras.layers.Dense(
+        250, activation="relu", kernel_initializer=initializer, name="state_value"
+    )(state_input)
+
+    action_input = keras.layers.Input(shape=(n_actions,), name="action_input")
+    action_value = keras.layers.Dense(
+        250, activation="relu", kernel_initializer=initializer, name="action_value"
+    )(action_input)
 
     intermediate = keras.layers.Concatenate()([state_value, action_value])
 
-    out = keras.layers.Dense(256, activation="relu")(intermediate)
-    out = keras.layers.Dense(256, activation="relu")(out)
-    outputs = keras.layers.Dense(1, activation=None, name="critic_value")(out)
+    out = keras.layers.Dense(
+        500, activation="relu", kernel_initializer=initializer, name="intermediate"
+    )(intermediate)
+    outputs = keras.layers.Dense(
+        1,
+        activation=None,
+        kernel_initializer=keras.initializers.RandomUniform(-0.003, 0.003),
+        name="critic_value",
+    )(out)
 
     model = keras.Model([state_input, action_input], outputs, name=name)
 
