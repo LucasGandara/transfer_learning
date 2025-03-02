@@ -25,12 +25,16 @@ class Env(object):
         self.position = Pose()
 
         self.steps = 0
+        self.timeout = False
 
         self.state_size = 28
-        self.action_size = 1
+        self.action_size = 2
 
         self.get_goalbox = False
         self.init_goal = True  # First time the Goal is initialized
+
+        self.past_distance = 0.0
+        self.past_action = [0] * self.action_size
 
         # Node publisher
         self.cmd_vel_publisher = rospy.Publisher("cmd_vel", Twist, queue_size=5)
@@ -60,37 +64,41 @@ class Env(object):
         elif heading < -math.pi:
             heading += 2 * math.pi
 
-        self.heading = round(heading, 2)
+        self.heading = round(heading, 3)
 
     def get_goal_distance(self):
         goal_distance = round(
             math.hypot(self.goal_x - self.position.x, self.goal_y - self.position.y), 2
         )
+        self.past_distance = goal_distance
 
         return goal_distance
 
     def get_reward(self, state, done):
-        current_distance = state[-3]
-        heading = abs(state[-4])
+        current_distance = state[-1]
+        heading = abs(state[-2])
 
-        heading = 3 - heading
+        distance_rate = self.past_distance - current_distance
 
-        distance_rate = 2 ** (current_distance / self.goal_distance)
+        if distance_rate > 0:
+            reward = 200.0 * distance_rate
 
-        # Calculate decay factor based on steps
-        max_steps = self.cfg["max_steps_per_episode"]
-        decay_factor = max(0, 1 - (self.steps / max_steps))
+        if distance_rate <= 0:
+            reward = -8.0
 
-        reward = heading * distance_rate * decay_factor
+        self.past_distance = current_distance
 
         if done:
-            rospy.loginfo("Collision!!")
-            reward = -200
-            self.cmd_vel_publisher.publish(Twist())
+            if self.timeout:
+                self.cmd_vel_publisher.publish(Twist())
+            else:
+                rospy.loginfo("Collision!!")
+                reward = -500
+                self.cmd_vel_publisher.publish(Twist())
 
         if self.get_goalbox:
             rospy.loginfo("Goal!!!! +1000 reward!!")
-            reward = 400
+            reward = 500
             self.cmd_vel_publisher.publish(Twist())
             self.goal_x, self.goal_y = self.respawn_goal.get_position(True, delete=True)
             self.goal_distance = self.get_goal_distance()
@@ -106,43 +114,45 @@ class Env(object):
         done = False
 
         for i in range(len(scan.ranges)):
-            if scan.ranges[i] == float("Inf"):
+            if scan.ranges[i] == float("Inf") or scan.ranges[i] == float("inf"):
                 scan_range.append(3.5)
-            elif np.isnan(scan.ranges[i]):
+            elif np.isnan(scan.ranges[i]) or scan.ranges[i] == float("nan"):
                 scan_range.append(0.0)
             else:
                 scan_range.append(scan.ranges[i])
 
-        obstacle_min_range = round(min(scan_range), 2)
-        obstacle_angle = np.argmin(scan_range)
         if min_range > min(scan_range) > 0:
             done = True
 
+        for action in self.past_action:
+            scan_range.append(action)
+
         if self.steps > self.cfg["max_steps_per_episode"]:
             rospy.loginfo("Time out!!")
+            self.timeout = True
             done = True
 
         current_distance = self.get_goal_distance()
-        if current_distance < 0.2:
+        if current_distance < 0.15:
             self.get_goalbox = True
 
         return (
-            scan_range
-            + [heading, current_distance, obstacle_min_range, obstacle_angle],
+            scan_range + [heading, current_distance],
             done,
         )
 
-    def step(self, action):
+    def step(self, action: float):
+        linear_vel = action[0]
+        w_vel = action[1]
+
         self.steps += 1
-        ang_vel = action
 
         cmd_vel = Twist()
-        cmd_vel.linear.x = 0.15
-        cmd_vel.angular.z = ang_vel
+        cmd_vel.linear.x = linear_vel
+        cmd_vel.angular.z = w_vel
         self.cmd_vel_publisher.publish(cmd_vel)
 
         data = None
-
         while data is None:
             try:
                 data = rospy.wait_for_message("scan", LaserScan, timeout=5)
@@ -151,6 +161,8 @@ class Env(object):
 
         state, done = self.get_state(data)
         reward = self.get_reward(state, done)
+
+        self.past_action = action
 
         return np.asarray(state), reward, done
 
@@ -173,7 +185,7 @@ class Env(object):
             self.init_goal = False
 
         self.goal_distance = self.get_goal_distance()
-        state, done = self.get_state(data)
+        state, _ = self.get_state(data)
 
         self.steps = 0
 

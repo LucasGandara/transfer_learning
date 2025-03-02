@@ -10,7 +10,6 @@ sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 import datetime
 
 import keras
-import numpy as np
 import tensorflow as tf
 
 from src.model_builders import build_actor, build_critic
@@ -64,7 +63,10 @@ class DDPGAgent(object):
             )
 
             self.target_actor = build_actor(
-                self.state_size, self.cfg["max_angular_vel"], "target_actor_model"
+                self.state_size,
+                self.cfg["max_linear_vel"],
+                self.cfg["max_angular_vel"],
+                "target_actor_model",
             )
             self.target_critic = build_critic(
                 self.state_size, self.action_size, "target_critic_model"
@@ -75,14 +77,20 @@ class DDPGAgent(object):
             self.target_critic.set_weights(self.critic.get_weights())
         else:
             self.actor = build_actor(
-                self.state_size, self.cfg["max_angular_vel"], "actor_model"
+                self.state_size,
+                self.cfg["max_linear_vel"],
+                self.cfg["max_angular_vel"],
+                "target_actor_model",
             )
             self.critic = build_critic(
                 self.state_size, self.action_size, "critic_model"
             )
 
-            self.target_actor = build_actor(
-                self.state_size, self.cfg["max_angular_vel"], "target_actor_model"
+            self.target_actor = self.target_actor = build_actor(
+                self.state_size,
+                self.cfg["max_linear_vel"],
+                self.cfg["max_angular_vel"],
+                "target_actor_model",
             )
             self.target_critic = build_critic(
                 self.state_size, self.action_size, "target_critic_model"
@@ -96,12 +104,14 @@ class DDPGAgent(object):
         self.target_model.set_weights(self.model.get_weights())
 
     def save_model(self):
-        self.target_actor.save("keras_models/ddpg_actor.keras")
-        self.target_critic.save("keras_models/ddpg_critic_model.keras")
+        self.target_actor.save(f"{self.base_path}/keras_models/ddpg_actor.keras")
+        self.target_critic.save(
+            f"{self.base_path}/keras_models/ddpg_critic_model.keras"
+        )
 
     def choose_action(self, state, training=True):
         action = self.actor(state, training=training)
-        # Paper states to use Ornstein-Uhlenbeck loss  (https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process)
+        # Paper states to use Ornstein-Uhlenbeck noise  (https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process)
         # White noise is enough
         noise = tf.random.normal((self.action_size,), 0.0, self.cfg["std_dev"])
         noisy_action = action + noise

@@ -8,7 +8,7 @@ import numpy as np
 
 class ReplayBuffer(object):
     def __init__(
-        self, state_dim: int, n_actions: int, buffer_capacity=100000, batch_size=64
+        self, state_dim: int, n_actions: int, buffer_capacity=1_000_000, batch_size=64
     ):
         # Number of "experiences" to store at max
         self.buffer_capacity = buffer_capacity
