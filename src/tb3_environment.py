@@ -13,6 +13,7 @@ from tf.transformations import euler_from_quaternion
 
 from src.consts import get_stage, get_stage_name
 from src.respawn_goal import RespawnGoal
+from src.reward_functions import combined_reward_function
 
 
 class Env(object):
@@ -78,27 +79,27 @@ class Env(object):
         current_distance = state[-1]
         heading = abs(state[-2])
 
-        distance_rate = self.past_distance - current_distance
-
-        if distance_rate > 0:
-            reward = 200.0 * distance_rate
-
-        if distance_rate <= 0:
-            reward = -8.0
-
-        self.past_distance = current_distance
+        reward = combined_reward_function(
+            theta=heading,
+            omega=self.heading,
+            start_distance=self.goal_distance,
+            current_distance=current_distance,
+            w_angular=self.cfg["w_angular"],
+            w_distance=self.cfg["w_distance"],
+            alpha=self.cfg["alpha_reward"],
+        )
 
         if done:
             if self.timeout:
                 self.cmd_vel_publisher.publish(Twist())
             else:
                 rospy.loginfo("Collision!!")
-                reward = -500
+                reward = -100
                 self.cmd_vel_publisher.publish(Twist())
 
         if self.get_goalbox:
             rospy.loginfo("Goal!!!! +1000 reward!!")
-            reward = 500
+            reward = 100
             self.cmd_vel_publisher.publish(Twist())
             self.goal_x, self.goal_y = self.respawn_goal.get_position(True, delete=True)
             self.goal_distance = self.get_goal_distance()

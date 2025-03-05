@@ -5,6 +5,11 @@ model_name: ddpg_tb3
 # Env
 stage: 1 # 0: main track, 1: tb3 world
 
+# Reward function
+w_angular: 1
+w_distance: 3.0
+alpha_reward: 0.5
+
 # DRL Agent
 critic_lr: 0.002
 actor_lr: 0.001
@@ -17,7 +22,7 @@ current_episode: 0
 num_episodes: 500
 max_steps_per_episode: 300
 reward_decay_factor: 0.01
-episode_step: 500
+episode_step: 200
 save_model_every: 30
 aggregate_stats_every: 10
 memory_size: 2000000

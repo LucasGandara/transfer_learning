@@ -10,6 +10,7 @@ sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 import datetime
 
 import keras
+import matplotlib.image as mpimg
 import tensorflow as tf
 
 from src.model_builders import build_actor, build_critic
@@ -31,6 +32,7 @@ class DDPGAgent(object):
         self.log_dir = f"{self.base_path}/{self.cfg['base_log_dir']}/ddpg_{date_time}"
         print(f"Logging metrics to {self.log_dir}")
         self.summary_writer = tf.summary.create_file_writer(self.log_dir)
+        self.model_plotted = False
 
         # RL Agent
         self.state_size = state_size
@@ -108,6 +110,9 @@ class DDPGAgent(object):
         self.target_critic.save(
             f"{self.base_path}/keras_models/ddpg_critic_model.keras"
         )
+        if not self.model_plotted:
+            self.plot_models()
+            self.model_plotted = True
 
     def choose_action(self, state, training=True):
         action = self.actor(state, training=training)
@@ -195,3 +200,34 @@ class DDPGAgent(object):
             )
 
         self.target_critic.set_weights(critic_target_weights)
+
+    def plot_models(self):
+        actor_model_path = (
+            f"{self.base_path}/{self.cfg['model_save_path']}/actor_model.png"
+        )
+        critic_model_path = (
+            f"{self.base_path}/{self.cfg['model_save_path']}/critic_model.png"
+        )
+
+        keras.utils.plot_model(
+            self.actor,
+            to_file=actor_model_path,
+            show_shapes=True,
+        )
+
+        keras.utils.plot_model(
+            self.critic,
+            to_file=critic_model_path,
+            show_shapes=True,
+        )
+
+        actor_model_img = mpimg.imread(actor_model_path)
+        critic_model_img = mpimg.imread(critic_model_path)
+
+        with self.summary_writer.as_default():
+            tf.summary.image(
+                "Actor model graph", tf.expand_dims(actor_model_img), step=0
+            )
+            tf.summary.image(
+                "Critic model graph", tf.expand_dims(critic_model_img), step=0
+            )
