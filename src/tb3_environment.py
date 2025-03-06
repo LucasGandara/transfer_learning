@@ -27,7 +27,7 @@ class Env(object):
         # Configuration
         self.cfg = cfg
 
-        self.state_size = 28
+        self.state_size = 29
         self.action_size = 2
         self.past_action = [0] * self.action_size
         self.steps = 0
@@ -84,6 +84,7 @@ class Env(object):
     def get_reward(self, state, done):
         current_distance = state[-1]
         heading = abs(state[-2])
+        step = state[-3]
 
         reward = combined_reward_function(
             theta=heading,
@@ -94,6 +95,7 @@ class Env(object):
             w_distance=self.cfg["w_distance"],
             alpha=self.cfg["alpha_reward"],
         )
+        reward = reward * (1 - step / self.cfg["max_steps_per_episode"])
 
         if done:
             if self.timeout:
@@ -151,7 +153,7 @@ class Env(object):
         return (
             scan_range
             + [
-                self.step / self.cfg["max_steps_per_episode"],
+                self.steps / self.cfg["max_steps_per_episode"],
                 heading,
                 current_distance,
             ],

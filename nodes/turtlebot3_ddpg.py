@@ -65,7 +65,7 @@ def start_ddpg(env: Env, agent: DDPGAgent, cfg: dict):
             )
 
         if episode % cfg["save_model_every"] == 0 and episode > 10:
-            agent.save_model()
+            agent.save_weights()
 
         rospy.sleep(0.1)
 
