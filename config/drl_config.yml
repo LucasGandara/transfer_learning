@@ -6,7 +6,7 @@ model_name: ddpg_tb3
 stage: 1 # 0: main track, 1: tb3 world
 
 # Reward function
-w_angular: 1
+w_angular: 2.0
 w_distance: 3.0
 alpha_reward: 0.5
 
@@ -20,7 +20,7 @@ std_dev: 0.2
 batch_size: 128
 current_episode: 0
 num_episodes: 500
-max_steps_per_episode: 300
+max_steps_per_episode: 250
 reward_decay_factor: 0.01
 episode_step: 200
 save_model_every: 30

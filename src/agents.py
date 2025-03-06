@@ -57,22 +57,49 @@ class DDPGAgent(object):
         self.target_actor = None
         self.critic = None
         self.target_critic = None
+        self.actor_weights_name = (
+            f"{self.base_path}/{self.cfg['model_save_base_path']}/ddpg_actor.weights.h5"
+        )
+
+        self.critic_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/ddpg_critic.weights.h5"
         self.load_models()
 
     def load_models(self):
+        example_state_input = tf.random.uniform(
+            (1, self.state_size)
+        )  # Batch size of 1, random state input
+        example_action_input = tf.random.uniform(
+            (1, self.action_size)
+        )  # Batch size of 1, random action input
+
         if self.cfg["load_model"]:
-            self.actor = keras.saving.load_model(
-                f"{self.base_path}/keras_models/ddpg_actor.keras"
+            self.actor = Actor(
+                action_dim=self.action_size,
+                action_limit_v=self.cfg["max_linear_vel"],
+                action_limit_w=self.cfg["max_angular_vel"],
+                name="actor",
             )
-            self.critic = keras.saving.load_model(
-                f"{self.base_path}/keras_models/ddpg_actor.keras"
+            self.critic = Critic(name="critic")
+
+            self.target_actor = Actor(
+                action_dim=self.action_size,
+                action_limit_v=self.cfg["max_linear_vel"],
+                action_limit_w=self.cfg["max_angular_vel"],
+                name="actor",
             )
-            self.target_actor = keras.saving.load_model(
-                f"{self.base_path}/keras_models/ddpg_actor.keras"
-            )
-            self.target_critic = keras.saving.load_model(
-                f"{self.base_path}/keras_models/ddpg_critic.keras"
-            )
+
+            self.target_critic = Critic(name="critic")
+
+            self.critic([example_state_input, example_action_input])
+            self.target_critic([example_state_input, example_action_input])
+            self.actor(example_state_input)
+            self.target_actor(example_state_input)
+
+            self.actor.load_weights(self.actor_weights_name)
+            self.target_actor.load_weights(self.actor_weights_name)
+
+            self.critic.load_weights(self.critic_weights_name)
+            self.target_critic.load_weights(self.critic_weights_name)
 
         else:
             self.actor = Actor(
@@ -97,14 +124,7 @@ class DDPGAgent(object):
             self.target_actor.set_weights(self.actor.get_weights())
             self.target_critic.set_weights(self.critic.get_weights())
 
-        example_state_input = tf.random.uniform(
-            (1, self.state_size)
-        )  # Batch size of 1, random state input
-        action_input = tf.random.uniform(
-            (1, self.action_size)
-        )  # Batch size of 1, random action input
-
-        self.critic([example_state_input, action_input])
+        self.critic([example_state_input, example_action_input])
         print("\n")
         self.critic.summary()
         print("\n")
@@ -232,10 +252,11 @@ class DDPGAgent(object):
                 "Critic model graph", tf.expand_dims(critic_model_img, axis=0), step=0
             )
 
-    def save_model(self):
-        self.target_actor.save(
-            f"{self.base_path}/{self.cfg['model_save_base_path']}/ddpg_actor.keras"
+    def save_weights(self):
+        self.target_actor.save_weights(
+            self.actor_weights_name,
+            True,
         )
-        self.target_critic.save(
-            f"{self.base_path}/{self.cfg['model_save_base_path']}/ddpg_critic_model.keras"
+        self.target_critic.save_weights(
+            f"{self.base_path}/{self.cfg['model_save_base_path']}/ddpg_critic.weights.h5"
         )
