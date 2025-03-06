@@ -8,7 +8,10 @@ from gazebo_msgs.msg import ModelStates
 from gazebo_msgs.srv import DeleteModel, SpawnModel
 from geometry_msgs.msg import Pose
 
-from src.consts import GOAL_X_LIST, GOAL_Y_LIST, Stage
+try:
+    from src.consts import GOAL_X_LIST, GOAL_Y_LIST, Stage
+except ModuleNotFoundError:
+    from consts import GOAL_X_LIST, GOAL_Y_LIST, Stage
 
 
 class RespawnGoal(object):

@@ -8,45 +8,52 @@ import rospy
 from geometry_msgs.msg import Pose, Twist
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan
+from std_msgs.msg import Float32
 from std_srvs.srv import Empty
 from tf.transformations import euler_from_quaternion
 
-from src.consts import get_stage, get_stage_name
-from src.respawn_goal import RespawnGoal
-from src.reward_functions import combined_reward_function
+try:
+    from src.consts import get_stage, get_stage_name
+    from src.respawn_goal import RespawnGoal
+    from src.reward_functions import combined_reward_function
+except ModuleNotFoundError:
+    from consts import get_stage, get_stage_name
+    from respawn_goal import RespawnGoal
+    from reward_functions import combined_reward_function
 
 
 class Env(object):
     def __init__(self, cfg):
+        # Configuration
         self.cfg = cfg
-
-        self.goal_x = 0
-        self.goal_y = 0
-        self.heading = 0
-        self.position = Pose()
-
-        self.steps = 0
-        self.timeout = False
 
         self.state_size = 28
         self.action_size = 2
-
+        self.past_action = [0] * self.action_size
+        self.steps = 0
+        self.timeout = False
         self.get_goalbox = False
         self.init_goal = True  # First time the Goal is initialized
 
-        self.past_distance = 0.0
-        self.past_action = [0] * self.action_size
+        # Goal
+        self.goal_x = 0.0
+        self.goal_y = 0.0
 
-        # Node publisher
-        self.cmd_vel_publisher = rospy.Publisher("cmd_vel", Twist, queue_size=5)
-
-        # Node subscriptions
-        rospy.Subscriber("odom", Odometry, self.odom_callback)
-        self.reset_proxy = rospy.ServiceProxy("gazebo/reset_simulation", Empty)
+        # Odometry
+        self.heading = 0
+        self.position = Pose()
 
         stage = get_stage(cfg["stage"])
         rospy.loginfo("Environment stage: {}".format(get_stage_name(cfg["stage"])))
         self.respawn_goal = RespawnGoal(stage)
+
+        # Node publisher
+        self.cmd_vel_publisher = rospy.Publisher("cmd_vel", Twist, queue_size=5)
+        self.reward_publisher = rospy.Publisher("reward", Float32, queue_size=5)
+
+        # Node subscriptions
+        self.reset_proxy = rospy.ServiceProxy("gazebo/reset_simulation", Empty)
+        rospy.Subscriber("odom", Odometry, self.odom_callback)
 
     def odom_callback(self, odom: Odometry):
         self.position = odom.pose.pose.position
@@ -65,13 +72,12 @@ class Env(object):
         elif heading < -math.pi:
             heading += 2 * math.pi
 
-        self.heading = round(heading, 3)
+        self.heading = round(heading, 2)
 
     def get_goal_distance(self):
         goal_distance = round(
             math.hypot(self.goal_x - self.position.x, self.goal_y - self.position.y), 2
         )
-        self.past_distance = goal_distance
 
         return goal_distance
 
@@ -92,6 +98,7 @@ class Env(object):
         if done:
             if self.timeout:
                 self.cmd_vel_publisher.publish(Twist())
+                reward = -100
             else:
                 rospy.loginfo("Collision!!")
                 reward = -100
@@ -105,6 +112,10 @@ class Env(object):
             self.goal_distance = self.get_goal_distance()
             self.get_goalbox = False
             self.steps = 0
+
+        reward_msg = Float32()
+        reward_msg.data = reward
+        self.reward_publisher.publish(reward_msg)
 
         return reward
 
@@ -138,7 +149,12 @@ class Env(object):
             self.get_goalbox = True
 
         return (
-            scan_range + [heading, current_distance],
+            scan_range
+            + [
+                self.step / self.cfg["max_steps_per_episode"],
+                heading,
+                current_distance,
+            ],
             done,
         )
 
@@ -194,6 +210,39 @@ class Env(object):
 
 
 if __name__ == "__main__":
-    rospy.init_node("tl_environment", anonymous=True)
-    env = Env()
+    import os
+
+    import yaml
+    from std_msgs.msg import Float32
+
+    # Load configuration
+    cfg = None
+    current_file_path = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
+    cfg_file_path = current_file_path + "/config/drl_config.yml"
+
+    with open(cfg_file_path, "r") as file:
+        cfg = yaml.safe_load(file)
+
+    rospy.init_node("tb3_environment", anonymous=True)
+
+    reward_publisher = rospy.Publisher("reward", Float32, queue_size=5)
+
+    linear_vel = 0.0
+    angular_vel = 0.0
+
+    def cmd_vel_callback(msg):
+        global linear_vel, angular_vel
+
+        linear_vel = msg.linear.x
+        angular_vel = msg.angular.z
+
+    rospy.Subscriber("cmd_vel", Twist, cmd_vel_callback)
+
+    env = Env(cfg)
     env.reset()
+
+    while True:
+        state, reward, done = env.step([linear_vel, angular_vel])
+        rospy.loginfo("Reward: {}".format(reward))
+        reward_publisher.publish(reward)
+        rospy.sleep(0.1)
