@@ -1,3 +1,5 @@
+import datetime
+import time
 from enum import Enum
 
 
@@ -36,25 +38,22 @@ GOAL_X_LIST = {
         0.482948,
     ],
     Stage.TB3_WORLD: [
-        0.1,
-        0.2,
-        0.3,
         0.4,
         0.6,
         0.8,
         1.0,
-        1.7,
+        1.5,
         0.5,
         0.2,
         -0.8,
         -1,
-        -1.7,
+        -1.5,
         0.5,
-        1.7,
+        1.5,
         0.5,
         0,
         -0.1,
-        -1.7,
+        -1.5,
     ],
 }
 
@@ -65,14 +64,11 @@ GOAL_Y_LIST = {
         -0.471472,
         -0.494202,
         0.539621,
-        2.043752,
+        1.8,
         0.571205,
         -0.440986,
     ],
     Stage.TB3_WORLD: [
-        0,
-        0,
-        0,
         0,
         0,
         0,
@@ -91,6 +87,19 @@ GOAL_Y_LIST = {
         -0.8,
     ],
 }
+
+
+def timeit(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.perf_counter()
+        func(*args, **kwargs)
+        end = time.perf_counter()
+        duration = end - start_time
+        print("\nThe training took: ")
+        print(str(datetime.timedelta(seconds=duration)), end="\n\n")
+
+    return wrapper
+
 
 if __name__ == "__main__":
     stage = 0
