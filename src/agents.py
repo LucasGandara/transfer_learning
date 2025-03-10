@@ -13,8 +13,12 @@ import keras
 import matplotlib.image as mpimg
 import tensorflow as tf
 
-from src.ddpg_models import Actor, Critic
-from src.replay_buffers import ReplayBuffer
+try:
+    from src.ddpg_models import create_actor_model, create_critic_model
+    from src.replay_buffers import ReplayBuffer
+except ModuleNotFoundError:
+    from ddpg_models import create_actor_model, create_critic_model
+    from replay_buffers import ReplayBuffer
 
 print("\nKeras version:", keras.__version__)
 print("Keras backend:", keras.backend.backend())  # tensorflow
@@ -73,56 +77,58 @@ class DDPGAgent(object):
         )  # Batch size of 1, random action input
 
         if self.cfg["load_model"]:
-            self.actor = Actor(
-                action_dim=self.action_size,
-                action_limit_v=self.cfg["max_linear_vel"],
-                action_limit_w=self.cfg["max_angular_vel"],
-                name="actor",
+            self.actor = create_actor_model(
+                (self.state_size,),
+                self.cfg["max_linear_vel"],
+                self.cfg["max_angular_vel"],
+                "actor",
             )
-            self.critic = Critic(name="critic")
-
-            self.target_actor = Actor(
-                action_dim=self.action_size,
-                action_limit_v=self.cfg["max_linear_vel"],
-                action_limit_w=self.cfg["max_angular_vel"],
-                name="actor",
+            self.target_actor = create_actor_model(
+                (self.state_size,),
+                self.cfg["max_linear_vel"],
+                self.cfg["max_angular_vel"],
+                "target_actor",
             )
-
-            self.target_critic = Critic(name="critic")
-
-            self.critic([example_state_input, example_action_input])
-            self.target_critic([example_state_input, example_action_input])
             self.actor(example_state_input)
             self.target_actor(example_state_input)
-
             self.actor.load_weights(self.actor_weights_name)
             self.target_actor.load_weights(self.actor_weights_name)
 
+            self.critic = create_critic_model(
+                (self.state_size,), (self.action_size,), name="critic"
+            )
+            self.target_critic = create_critic_model(
+                (self.state_size,), (self.action_size,), name="critic"
+            )
+            self.critic([example_state_input, example_action_input])
+            self.target_critic([example_state_input, example_action_input])
             self.critic.load_weights(self.critic_weights_name)
             self.target_critic.load_weights(self.critic_weights_name)
 
         else:
-            self.actor = Actor(
-                action_dim=self.action_size,
-                action_limit_v=self.cfg["max_linear_vel"],
-                action_limit_w=self.cfg["max_angular_vel"],
-                name="actor",
+            self.actor = create_actor_model(
+                (self.state_size,),
+                self.cfg["max_linear_vel"],
+                self.cfg["max_angular_vel"],
+                "actor",
+            )
+            self.target_actor = create_actor_model(
+                (self.state_size,),
+                self.cfg["max_linear_vel"],
+                self.cfg["max_angular_vel"],
+                "target_actor",
             )
 
-            self.critic = Critic(name="critic")
-
-            self.target_actor = Actor(
-                action_dim=self.action_size,
-                action_limit_v=self.cfg["max_linear_vel"],
-                action_limit_w=self.cfg["max_angular_vel"],
-                name="target_actor",
+            self.critic = create_critic_model(
+                (self.state_size,), (self.action_size,), name="critic"
+            )
+            self.target_critic = create_critic_model(
+                (self.state_size,), (self.action_size,), name="critic"
             )
 
-            self.target_critic = Critic(name="target_critic")
-
-            # Copy weights
-            self.target_actor.set_weights(self.actor.get_weights())
-            self.target_critic.set_weights(self.critic.get_weights())
+        # Copy weights
+        self.target_actor.set_weights(self.actor.get_weights())
+        self.target_critic.set_weights(self.critic.get_weights())
 
         self.critic([example_state_input, example_action_input])
         print("\n")
@@ -257,6 +263,22 @@ class DDPGAgent(object):
             self.actor_weights_name,
             True,
         )
-        self.target_critic.save_weights(
-            f"{self.base_path}/{self.cfg['model_save_base_path']}/ddpg_critic.weights.h5"
-        )
+        self.target_critic.save_weights(self.critic_weights_name)
+
+
+if __name__ == "__main__":
+    import os
+
+    import yaml
+    import rospy
+
+    # Load configuration
+    cfg = None
+    current_file_path = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
+    cfg_file_path = current_file_path + "/config/drl_config.yml"
+
+    with open(cfg_file_path, "r") as file:
+        cfg = yaml.safe_load(file)
+
+    rospy.init_node("tb3_agents", anonymous=True)
+    agent = DDPGAgent(28, 2, cfg)

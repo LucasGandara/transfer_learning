@@ -7,4 +7,4 @@ mkdocs==1.6.1
 matplotlib==3.9.4
 pydot==3.0.4
 pyaml==25.1.0
-rospkg==1.6.0s
+rospkg==1.6.0
