@@ -12,10 +12,10 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Python Debugger: drl_training_node",
+            "name": "drl_training_node",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/nodes/drl_training_node.py",
+            "program": "${workspaceFolder}/nodes/turtlebot3_ddpg.py",
             "console": "integratedTerminal"
         }
     ]
