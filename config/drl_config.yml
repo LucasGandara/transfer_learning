@@ -14,7 +14,7 @@ alpha_reward: 0.5
 critic_lr: 0.002
 actor_lr: 0.001
 gamma: 0.99
-tau: 0.001
+tau: 0.005
 std_dev: 0.02
 
 batch_size: 128
