@@ -30,6 +30,11 @@ launch `main_track.launch` launch file:
 roslaunch transfer_learning main_track.launch
 ```
 
+Start the training by starting the training node:
+```sh
+roslaunch transfer_learning start_training.launch
+```
+
 ## Potential Mobile bases
 - [Husarion Rosbot](https://robots.ros.org/husarion-rosbot-2-pro/)
 
