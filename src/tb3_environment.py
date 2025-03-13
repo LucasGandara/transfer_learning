@@ -27,8 +27,8 @@ class Env(object):
         # Configuration
         self.cfg = cfg
 
-        self.state_size = 29
-        self.action_size = 2
+        self.state_size = 27
+        self.action_size = 1
         self.past_action = [0] * self.action_size
         self.steps = 0
         self.timeout = False
@@ -50,6 +50,9 @@ class Env(object):
         # Node publisher
         self.cmd_vel_publisher = rospy.Publisher("cmd_vel", Twist, queue_size=5)
         self.reward_publisher = rospy.Publisher("reward", Float32, queue_size=5)
+        self.goal_position_publisher = rospy.Publisher(
+            "/current_goal_position", Float32, queue_size=5
+        )
 
         # Node subscriptions
         self.reset_proxy = rospy.ServiceProxy("gazebo/reset_simulation", Empty)
@@ -79,6 +82,10 @@ class Env(object):
             math.hypot(self.goal_x - self.position.x, self.goal_y - self.position.y), 2
         )
 
+        goal_distance_msg = Float32()
+        goal_distance_msg.data = goal_distance
+        self.goal_position_publisher.publish(goal_distance_msg)
+
         return goal_distance
 
     def get_reward(self, state, done):
@@ -95,7 +102,8 @@ class Env(object):
             w_distance=self.cfg["w_distance"],
             alpha=self.cfg["alpha_reward"],
         )
-        reward = reward * (1 - step / self.cfg["max_steps_per_episode"])
+
+        # reward = reward * (1 - step / self.cfg["max_steps_per_episode"])
 
         if done:
             if self.timeout:
@@ -138,8 +146,8 @@ class Env(object):
         if min_range > min(scan_range) > 0:
             done = True
 
-        for action in self.past_action:
-            scan_range.append(action)
+        # for action in self.past_action:
+        #     scan_range.append(action)
 
         if self.steps > self.cfg["max_steps_per_episode"]:
             rospy.loginfo("Time out!!")
@@ -161,8 +169,8 @@ class Env(object):
         )
 
     def step(self, action: float):
-        linear_vel = action[0]
-        w_vel = action[1]
+        linear_vel = 0.15
+        w_vel = action[0]
 
         self.steps += 1
 
