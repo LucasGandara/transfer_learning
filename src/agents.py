@@ -145,14 +145,15 @@ class DDPGAgent(object):
 
     def get_action(self, state, training=True):
         action = self.actor(state, training=training)
+
         # Paper states to use Ornstein-Uhlenbeck noise  (https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process)
         # White noise is enough
         noise = tf.random.normal((self.action_size,), 0.0, self.cfg["std_dev"])
-        noisy_action = [(action[0] + noise[0])[0][0], (action[1] + noise[1])[0][0]]
+        noisy_action = action + noise
 
         return tf.clip_by_value(
             noisy_action, -self.cfg["max_angular_vel"], self.cfg["max_angular_vel"]
-        )
+        )[0]
 
     def store_transition(self, state, action, reward, new_state):
         self.memory.store_transition(state, action, reward, new_state)
@@ -169,23 +170,18 @@ class DDPGAgent(object):
             self.actor_loss_memory += actor_loss.numpy()
 
     @tf.function
-    def train_step(self, state, action, reward, new_state):
+    def train_step(self, state, action, reward, next_states):
+
         # Update Critic
         with tf.GradientTape() as tape:
-            target_actions = self.target_actor(new_state, training=True)
-            angular_velocities = target_actions[0]
-            linear_velocities = target_actions[1]
-            stacked_actions = tf.stack([angular_velocities, linear_velocities], axis=1)
-            stacked_actions = tf.reshape(
-                stacked_actions, [stacked_actions.shape[0], -1]
-            )
-
+            target_action_values = self.target_actor(next_states, training=True)
             y = reward + self.gamma * self.target_critic(
-                [new_state, stacked_actions], training=True
+                [next_states, target_action_values], training=True
             )
 
             critic_value = self.critic([state, action], training=True)
             critic_loss = keras.ops.mean(keras.ops.square(y - critic_value))
+            # critic_loss = keras.losses.mean_squared_error(y, critic_value)
 
         critic_grads = tape.gradient(critic_loss, self.critic.trainable_variables)
         self.critic_optimizer.apply_gradients(
@@ -195,14 +191,9 @@ class DDPGAgent(object):
         # Update Actor
         with tf.GradientTape() as tape:
             actions = self.actor(state, training=True)
-            angular_velocities = actions[0]
-            linear_velocities = actions[1]
-            stacked_actions = tf.stack([angular_velocities, linear_velocities], axis=1)
-            stacked_actions = tf.reshape(
-                stacked_actions, [stacked_actions.shape[0], -1]
-            )
-            critic_value = self.critic([state, stacked_actions], training=True)
+            critic_value = self.critic([state, actions], training=True)
             actor_loss = -keras.ops.mean(critic_value)
+            # actor_loss = -tf.math.reduce_mean(critic_value)
 
         actor_gradients = tape.gradient(actor_loss, self.actor.trainable_variables)
         self.actor_optimizer.apply_gradients(
