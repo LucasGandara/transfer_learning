@@ -36,7 +36,7 @@ def start_ddpg(env: Env, agent: DDPGAgent, cfg: dict):
             )
             observation_, reward, done = env.step(action)
             score += reward
-            agent.store_transition(observation, action, reward, observation_)
+            agent.store_transition(observation, action, reward, observation_, 1 if done else 0)
             agent.learn()
             agent.update_targets()
 

@@ -37,8 +37,8 @@ class FanInDense(keras.layers.Layer):
 def create_actor_model(input_shape, max_w, max_v, name):
     ### Actor network. It should return a value for each action
     inputs = keras.layers.Input(shape=input_shape, name="input")
-    out = keras.layers.Dense(256, activation="relu", name="dense_1")(inputs)
-    out = keras.layers.Dense(256, activation="relu", name="dense_2")(out)
+    out = keras.layers.Dense(512, activation="relu", name="dense_1")(inputs)
+    out = keras.layers.Dense(512, activation="relu", name="dense_2")(out)
     outputs = keras.layers.Dense(
         1,
         activation="tanh",
@@ -60,20 +60,20 @@ def create_actor_model(input_shape, max_w, max_v, name):
 def create_critic_model(state_input_shape, action_input_shape, name):
     ### Critic on the state - action pair. It should return a value of the pair
     state_input = keras.layers.Input(shape=state_input_shape, name="state_input")
-    state_out = keras.layers.Dense(16, activation="relu", name="state_out")(state_input)
-    state_value = keras.layers.Dense(32, activation="relu", name="state_value")(
+    state_out = keras.layers.Dense(32, activation="relu", name="state_out")(state_input)
+    state_value = keras.layers.Dense(64, activation="relu", name="state_value")(
         state_out
     )
 
     action_input = keras.layers.Input(shape=action_input_shape, name="actin_input")
-    action_value = keras.layers.Dense(32, activation="relu", name="action_value")(
+    action_value = keras.layers.Dense(64, activation="relu", name="action_value")(
         action_input
     )
 
     intermediate = keras.layers.Concatenate()([state_value, action_value])
 
-    out = keras.layers.Dense(256, activation="relu")(intermediate)
-    out = keras.layers.Dense(256, activation="relu")(out)
+    out = keras.layers.Dense(512, activation="relu")(intermediate)
+    out = keras.layers.Dense(512, activation="relu")(out)
     outputs = keras.layers.Dense(1, activation=None, name="critic_value")(out)
 
     model = keras.Model([state_input, action_input], outputs, name=name)

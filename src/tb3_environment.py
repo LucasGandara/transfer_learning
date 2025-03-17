@@ -169,7 +169,7 @@ class Env(object):
         )
 
     def step(self, action: float):
-        linear_vel = 0.15
+        linear_vel = 0.12
         w_vel = action[0]
 
         self.steps += 1
