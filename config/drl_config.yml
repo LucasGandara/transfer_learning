@@ -15,19 +15,19 @@ critic_lr: 0.002
 actor_lr: 0.001
 gamma: 0.99
 tau: 0.005
-std_dev: 0.04
+std_dev: 0.03
 
-batch_size: 128
+batch_size: 1024
 current_episode: 0
-num_episodes: 500
-max_steps_per_episode: 250
+num_episodes: 5000
+max_steps_per_episode: 450
 reward_decay_factor: 0.01
 episode_step: 200
 save_model_every: 30
 aggregate_stats_every: 10
-memory_size: 2000000
+memory_size: 1000000
 max_linear_vel: 0.15
-max_angular_vel: 0.15
+max_angular_vel: 0.20
 
 # Logs
 base_log_dir: logs

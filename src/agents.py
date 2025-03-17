@@ -24,7 +24,7 @@ print("\nKeras version:", keras.__version__)
 print("Keras backend:", keras.backend.backend())  # tensorflow
 assert keras.backend.backend() == "tensorflow"
 print("TensorFlow version:", tf.__version__, end="\n\n")
-tf.config.run_functions_eagerly(True)
+
 
 
 class DDPGAgent(object):
@@ -155,31 +155,31 @@ class DDPGAgent(object):
             noisy_action, -self.cfg["max_angular_vel"], self.cfg["max_angular_vel"]
         )[0]
 
-    def store_transition(self, state, action, reward, new_state):
-        self.memory.store_transition(state, action, reward, new_state)
+    def store_transition(self, state, action, reward, new_state, done):
+        self.memory.store_transition(state, action, reward, new_state, done)
 
     def learn(self):
         if self.memory.buffer_counter > self.batch_size:
-            state, action, reward, new_state = self.memory.sample_buffer(
+            state, action, reward, new_state, done = self.memory.sample_buffer(
                 self.batch_size
             )
 
-            critic_loss, actor_loss = self.train_step(state, action, reward, new_state)
+            critic_loss, actor_loss = self.train_step(state, action, reward, new_state, done)
 
             self.critic_loss_memory += critic_loss.numpy()
             self.actor_loss_memory += actor_loss.numpy()
 
     @tf.function
-    def train_step(self, state, action, reward, next_states):
+    def train_step(self, states, actions, rewards, next_states, dones):
 
         # Update Critic
         with tf.GradientTape() as tape:
             target_action_values = self.target_actor(next_states, training=True)
-            y = reward + self.gamma * self.target_critic(
+            y = rewards + self.gamma * (1 - dones) * self.target_critic(
                 [next_states, target_action_values], training=True
             )
 
-            critic_value = self.critic([state, action], training=True)
+            critic_value = self.critic([states, actions], training=True)
             critic_loss = keras.ops.mean(keras.ops.square(y - critic_value))
             # critic_loss = keras.losses.mean_squared_error(y, critic_value)
 
@@ -190,8 +190,8 @@ class DDPGAgent(object):
 
         # Update Actor
         with tf.GradientTape() as tape:
-            actions = self.actor(state, training=True)
-            critic_value = self.critic([state, actions], training=True)
+            actions = self.actor(states, training=True)
+            critic_value = self.critic([states, actions], training=True)
             actor_loss = -keras.ops.mean(critic_value)
             # actor_loss = -tf.math.reduce_mean(critic_value)
 
