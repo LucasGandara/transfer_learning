@@ -11,14 +11,14 @@ w_distance: 3.0
 alpha_reward: 0.5
 
 # DRL Agent
-agnet: TD3
+agent: TD3
 critic_lr: 0.002
 actor_lr: 0.001
 gamma: 0.99
 tau: 0.005
 std_dev: 0.03
 
-batch_size: 1024
+batch_size: 512
 current_episode: 0
 num_episodes: 5000
 max_steps_per_episode: 450
@@ -26,7 +26,7 @@ reward_decay_factor: 0.01
 episode_step: 200
 save_model_every: 30
 aggregate_stats_every: 10
-memory_size: 1000000
+memory_size: 50000
 max_linear_vel: 0.15
 max_angular_vel: 0.20
 
