@@ -14,13 +14,13 @@ import yaml
 from gazebo_msgs.srv import DeleteModel, DeleteModelRequest
 
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-from src.agents import DDPGAgent
+from src.agents import Agent, DDPGAgent, TD3Agent
 from src.consts import timeit
 from src.tb3_environment import Env
 
 
 @timeit
-def start_ddpg(env: Env, agent: DDPGAgent, cfg: dict):
+def start_ddpg(env: Env, agent: Agent, cfg: dict):
     scores = []
     for episode in range(
         cfg["current_episode"] + 1, cfg["current_episode"] + cfg["num_episodes"]
@@ -36,7 +36,9 @@ def start_ddpg(env: Env, agent: DDPGAgent, cfg: dict):
             )
             observation_, reward, done = env.step(action)
             score += reward
-            agent.store_transition(observation, action, reward, observation_, 1 if done else 0)
+            agent.store_transition(
+                observation, action, reward, observation_, 1 if done else 0
+            )
             agent.learn()
             agent.update_targets()
 
@@ -113,6 +115,13 @@ if __name__ == "__main__":
     rospy.loginfo(f"Log level: {LOG_LEVEL}")
 
     env = Env(cfg)
-    agent = DDPGAgent(env.state_size, env.action_size, cfg)
+
+    if cfg["agent"] == "DDPG":
+        agent = DDPGAgent(env.state_size, env.action_size, cfg)
+    elif cfg["agent"] == "TD3":
+        agent = TD3Agent(env.state_size, env.action_size, cfg)
+    else:
+        rospy.logerr("Invalid agent type. Exiting...")
+        exit(1)
 
     start_ddpg(env, agent, cfg)
