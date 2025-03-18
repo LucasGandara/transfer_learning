@@ -11,6 +11,7 @@ w_distance: 3.0
 alpha_reward: 0.5
 
 # DRL Agent
+agnet: TD3
 critic_lr: 0.002
 actor_lr: 0.001
 gamma: 0.99
