@@ -341,7 +341,7 @@ class TD3Agent(Agent):
         self.gamma = self.cfg["gamma"]
         self.tau = self.cfg["tau"]
         self.memory = ReplayBuffer(
-            self.cfg["memory_size"], self.state_size, 1, discrete=False
+            self.cfg["memory_size"], self.state_size, self.action_size
         )
         self.train_epochs = 0
         self.actor_loss_memory = 0
@@ -491,7 +491,7 @@ class TD3Agent(Agent):
         self.memory.store_transition(state, action, reward, new_state, done)
 
     def learn(self):
-        if self.memory.buffer_counter > self.cfg["memory_size"] / 2:
+        if self.memory.buffer_counter > self.cfg["batch_size"]:
 
             if not self.started_training:
                 print("Training started")
@@ -652,9 +652,15 @@ class TD3Agent(Agent):
         critic_2_model_img = mpimg.imread(critic_2_model_path)
 
         with self.summary_writer.as_default():
-            tf.summary.image("Actor Model", actor_model_img[:, :, :3], step=0)
-            tf.summary.image("Critic 1 Model", critic_1_model_img[:, :, :3], step=0)
-            tf.summary.image("Critic 2 Model", critic_2_model_img[:, :, :3], step=0)
+            tf.summary.image(
+                "Actor Model", tf.expand_dims(actor_model_img, axis=0), step=0
+            )
+            tf.summary.image(
+                "Critic 1 Model", tf.expand_dims(critic_1_model_img, axis=0), step=0
+            )
+            tf.summary.image(
+                "Critic 2 Model", tf.expand_dims(critic_2_model_img, axis=0), step=0
+            )
 
     def save_weights(self):
         self.target_actor.save_weights(

@@ -27,7 +27,7 @@ class Env(object):
         # Configuration
         self.cfg = cfg
 
-        self.state_size = 27
+        self.state_size = 28
         self.action_size = 1
         self.past_action = [0] * self.action_size
         self.steps = 0
@@ -88,14 +88,13 @@ class Env(object):
 
         return goal_distance
 
-    def get_reward(self, state, done):
+    def get_reward(self, state, action_w, done):
         current_distance = state[-1]
         heading = abs(state[-2])
-        step = state[-3]
 
         reward = combined_reward_function(
             theta=heading,
-            omega=self.heading,
+            omega=action_w,
             start_distance=self.goal_distance,
             current_distance=current_distance,
             w_angular=self.cfg["w_angular"],
@@ -106,13 +105,13 @@ class Env(object):
         # reward = reward * (1 - step / self.cfg["max_steps_per_episode"])
 
         if done:
-            if self.timeout:
-                self.cmd_vel_publisher.publish(Twist())
-                reward = -100
-            else:
-                rospy.loginfo("Collision!!")
-                reward = -100
-                self.cmd_vel_publisher.publish(Twist())
+            # if self.timeout:
+            #     self.cmd_vel_publisher.publish(Twist())
+            #     reward = -150
+            # else:
+            rospy.loginfo("Collision!!")
+            reward = -150
+            self.cmd_vel_publisher.publish(Twist())
 
         if self.get_goalbox:
             rospy.loginfo("Goal!!!! +1000 reward!!")
@@ -143,16 +142,19 @@ class Env(object):
             else:
                 scan_range.append(scan.ranges[i])
 
+        obstacle_min_range = round(min(scan_range), 2)
+        obstacle_angle = np.argmin(scan_range)
+
         if min_range > min(scan_range) > 0:
             done = True
 
         # for action in self.past_action:
         #     scan_range.append(action)
 
-        if self.steps > self.cfg["max_steps_per_episode"]:
-            rospy.loginfo("Time out!!")
-            self.timeout = True
-            done = True
+        # if self.steps > self.cfg["max_steps_per_episode"]:
+        #     rospy.loginfo("Time out!!")
+        #     self.timeout = True
+        #     done = True
 
         current_distance = self.get_goal_distance()
         if current_distance < 0.15:
@@ -160,16 +162,12 @@ class Env(object):
 
         return (
             scan_range
-            + [
-                self.steps / self.cfg["max_steps_per_episode"],
-                heading,
-                current_distance,
-            ],
+            + [obstacle_min_range, obstacle_angle, heading, current_distance],
             done,
         )
 
     def step(self, action: float):
-        linear_vel = 0.12
+        linear_vel = 0.15
         w_vel = action[0]
 
         self.steps += 1
@@ -187,7 +185,7 @@ class Env(object):
                 pass
 
         state, done = self.get_state(data)
-        reward = self.get_reward(state, done)
+        reward = self.get_reward(state, action, done)
 
         self.past_action = action
 

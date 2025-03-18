@@ -20,12 +20,12 @@ from src.tb3_environment import Env
 
 
 @timeit
-def start_ddpg(env: Env, agent: Agent, cfg: dict):
+def start_drl(env: Env, agent: Agent, cfg: dict):
     scores = []
     for episode in range(
         cfg["current_episode"] + 1, cfg["current_episode"] + cfg["num_episodes"]
     ):
-        score = 0
+        score = 0.0
         observation = env.reset()
         agent.actor_loss_memory = 0
         agent.critic_loss_memory = 0
@@ -116,12 +116,15 @@ if __name__ == "__main__":
 
     env = Env(cfg)
 
-    if cfg["agent"] == "DDPG":
+    agent = cfg["agent"]
+    rospy.loginfo(f"Using {agent} agnet!\n")
+
+    if agent == "DDPG":
         agent = DDPGAgent(env.state_size, env.action_size, cfg)
-    elif cfg["agent"] == "TD3":
+    elif agent == "TD3":
         agent = TD3Agent(env.state_size, env.action_size, cfg)
     else:
         rospy.logerr("Invalid agent type. Exiting...")
         exit(1)
 
-    start_ddpg(env, agent, cfg)
+    start_drl(env, agent, cfg)

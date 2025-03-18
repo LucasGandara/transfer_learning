@@ -43,30 +43,37 @@ def linear_reward_function(start_distance, current_distance):
 
 
 def combined_reward_function(
-    theta,
-    omega,
-    start_distance,
-    current_distance,
+    theta: float,
+    omega: float,
+    start_distance: float,
+    current_distance: float,
     w_angular=1.0,
     w_distance=1.0,
     alpha=1.0,
 ):
-    """
-    Calculate the combined reward based on angular velocity, heading, and distance to the goal.
+    """Calculate the combined reward based on angular velocity, heading, and distance.
 
-    Parameters:
-    - theta: Heading angle in radians (difference between robot orientation and goal direction).
-    - omega: Angular velocity (rate of change of the robot's heading).
-    - start_distance: Distance from the starting position to the goal.
-    - current_distance: Current distance from the robot's position to the goal.
-    - w_angular: Weight for the angular velocity and heading reward (default is 1.0).
-    - w_distance: Weight for the distance-based reward (default is 1.0).
-    - alpha: Weighting factor for the improvement in heading (default is 1.0).
+    The reward function combines multiple factors to guide robot navigation:
+    - Angular components (heading and velocity)
+    - Distance improvement towards the goal
+
+    Args:
+        theta (float): Heading angle in radians (difference between robot
+            orientation and goal direction)
+        omega (float): Angular velocity (rate of change of the robot's heading)
+        start_distance (float): Distance from the starting position to the goal
+        current_distance (float): Current distance from robot's position to goal
+        w_angular (float, optional): Weight for angular velocity and heading
+            reward. Defaults to 1.0
+        w_distance (float, optional): Weight for distance-based reward.
+            Defaults to 1.0
+        alpha (float, optional): Weighting factor for heading improvement.
+            Defaults to 1.0
 
     Returns:
-    - total_reward: The combined reward considering both heading/velocity and distance.
+        float: The combined reward considering both heading/velocity and distance
     """
-    # Angular reward (from previous function)
+    # Angular reward
     heading_reward = -abs(theta)
     improvement_reward = np.sign(-theta) * np.sign(omega)
     angular_reward = heading_reward + alpha * improvement_reward
@@ -77,4 +84,4 @@ def combined_reward_function(
     # Combined reward
     total_reward = w_angular * angular_reward + w_distance * distance_reward
 
-    return total_reward
+    return total_reward[0]

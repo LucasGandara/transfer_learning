@@ -15,7 +15,7 @@
             "name": "drl_training_node",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/nodes/turtlebot3_ddpg.py",
+            "program": "${workspaceFolder}/nodes/turtlebot3_rl.py",
             "console": "integratedTerminal"
         }
     ]
