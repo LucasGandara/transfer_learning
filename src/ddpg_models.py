@@ -72,7 +72,7 @@ def create_critic_model(state_input_shape, action_input_shape, name):
     intermediate = keras.layers.Concatenate()([state_value, action_value])
 
     out = keras.layers.Dense(256, activation="relu")(intermediate)
-    out = keras.layers.Dense(556, activation="relu")(out)
+    out = keras.layers.Dense(256, activation="relu")(out)
     outputs = keras.layers.Dense(1, activation=None, name="critic_value")(out)
 
     model = keras.Model([state_input, action_input], outputs, name=name)
