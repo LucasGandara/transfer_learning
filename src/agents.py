@@ -12,7 +12,9 @@ from abc import ABC, abstractmethod
 
 import keras
 import matplotlib.image as mpimg
+import rospy
 import tensorflow as tf
+from std_msgs.msg import Float32
 
 try:
     from src.ddpg_models import create_actor_model, create_critic_model
@@ -71,11 +73,101 @@ class Agent(ABC):
         raise NotImplementedError
 
 
+class DQNAgent(Agent):
+    def __init__(self, state_size, action_size, cfg):
+        self.state_size = state_size
+        self.action_size = action_size
+        self.cfg = cfg
+
+        # Logs
+        self.base_path = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
+        date_time = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
+        self.log_dir = f"{self.base_path}/{self.cfg['base_log_dir']}/dqn_{date_time}"
+        print(f"Logging metrics to {self.log_dir}")
+        self.summary_writer = tf.summary.create_file_writer(self.log_dir)
+
+        # RL Agent
+        self.critic_lr = self.cfg["critic_lr"]
+        self.batch_size = self.cfg["batch_size"]
+        self.epsilon = 1.0
+        self.gamma = self.cfg["gamma"]
+        self.epsilon_decay = self.cfg["epsilon_decay"]
+        self.min_epsilon = self.cfg["min_epsilon"]
+
+        # Q Function
+        self.q_function = None
+        self.q_function_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/dqn_q_function.weights.h5"
+
+        self.load_models()
+
+    def load_models(self):
+        example_state_input = tf.random.uniform(
+            (self.cfg["batch_size"], self.state_size)
+        )  # Batch size of 1, random state input
+
+        if self.cfg["load_model"]:
+            self.q_function = create_critic_model(
+                self.state_size, self.action_size, "q_function"
+            )
+            self.q_function(example_state_input)
+            self.q_function.load_weights(self.q_function_weights_name)
+        else:
+            self.q_function = create_critic_model(
+                self.state_size, self.action_size, "q_function"
+            )
+            self.q_function(example_state_input)
+
+        print("\n")
+        self.q_function.summary()
+        print("\n")
+
+        self.plot_models()
+
+    def get_action(self, state, training=True):
+        random_number = tf.random.uniform(shape=(), minval=0, maxval=1)
+        self.epsilon *= self.epsilon_decay
+
+        if self.epsilon > random_number:
+            return tf.random.uniform(
+                shape=(1,), minval=0, maxval=self.action_size, dtype=tf.int32
+            )
+        else:
+            q_values = self.q_function(state)
+            return tf.argmax(q_values, axis=1, output_type=tf.int32)
+
+    def store_transition(self, state, action, reward, state_, done):
+        self.memory.store_transition(state, action, reward, state_, done)
+
+    def plot_models(self):
+        q_function_model_path = f"{self.base_path}/{self.cfg['model_save_base_path']}/dqn_q_function_model.png"
+        keras.utils.plot_model(
+            self.q_function,
+            to_file=q_function_model_path,
+            show_shapes=True,
+            show_layer_names=True,
+        )
+
+        q_function_model_img = mpimg.imread(q_function_model_path)
+
+        with self.summary_writer.as_default():
+            tf.summary.image(
+                "Q Function Model", tf.expand_dims(q_function_model_img, axis=0), step=0
+            )
+
+    def save_weights(self):
+        self.q_function.save_weights(self.q_function_weights_name)
+
+
 class DDPGAgent(Agent):
     def __init__(self, state_size: int, action_size: int, cfg):
         self.state_size = state_size
         self.action_size = action_size
         self.cfg = cfg
+        self.memory = ReplayBuffer(
+            self.cfg["memory_size"], self.state_size, self.action_size
+        )
+        self.train_epochs = 0
+        self.critic_loss_memory = 0
 
         # Logs
         self.base_path = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
@@ -100,6 +192,12 @@ class DDPGAgent(Agent):
 
         self.actor_optimizer = keras.optimizers.Adam(learning_rate=self.actor_lr)
         self.critic_optimizer = keras.optimizers.Adam(learning_rate=self.critic_lr)
+
+        # Ros publishers
+        self.action_publisher = rospy.Publisher("/action", Float32, queue_size=5)
+        self.noisy_action_publisher = rospy.Publisher(
+            "/noisy_action", Float32, queue_size=5
+        )
 
         # Load models
         self.actor = None
@@ -190,11 +288,19 @@ class DDPGAgent(Agent):
     def get_action(self, state, training=True):
         action = self.actor(state, training=training)
 
+        action_msg = Float32()
+        action_msg.data = action.numpy()[0]
+        self.action_publisher.publish(action_msg)
+
         # Paper states to use Ornstein-Uhlenbeck noise  (https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process)
         # White noise is enough
         noise = tf.random.normal((self.action_size,), 0.0, 1.0)
         noise = tf.clip_by_value(noise, -0.5, 0.5)
         noisy_action = action + noise
+
+        noisy_action_msg = Float32()
+        noisy_action_msg.data = noisy_action
+        self.noisy_action_publisher.publish(noisy_action_msg)
 
         return tf.clip_by_value(
             noisy_action, -self.cfg["max_angular_vel"], self.cfg["max_angular_vel"]
@@ -204,7 +310,7 @@ class DDPGAgent(Agent):
         self.memory.store_transition(state, action, reward, new_state, done)
 
     def learn(self):
-        if self.memory.buffer_counter > self.cfg["memory_size"] / 2:
+        if self.memory.buffer_counter > self.cfg["batch_size"]:
             state, action, reward, new_state, done = self.memory.sample_buffer(
                 self.batch_size
             )
@@ -217,16 +323,16 @@ class DDPGAgent(Agent):
             self.actor_loss_memory += actor_loss.numpy()
 
     @tf.function
-    def train_step(self, states, actions, rewards, next_states, dones):
+    def train_step(self, state, action, reward, next_states, _):
 
         # Update Critic
         with tf.GradientTape() as tape:
             target_action_values = self.target_actor(next_states, training=True)
-            y = rewards + self.gamma * (1 - dones) * self.target_critic(
+            y = reward + self.gamma * self.target_critic(
                 [next_states, target_action_values], training=True
             )
 
-            critic_value = self.critic([states, actions], training=True)
+            critic_value = self.critic([state, action], training=True)
             critic_loss = keras.ops.mean(keras.ops.square(y - critic_value))
             # critic_loss = keras.losses.mean_squared_error(y, critic_value)
 
@@ -237,8 +343,8 @@ class DDPGAgent(Agent):
 
         # Update Actor
         with tf.GradientTape() as tape:
-            actions = self.actor(states, training=True)
-            critic_value = self.critic([states, actions], training=True)
+            actions = self.actor(state, training=True)
+            critic_value = self.critic([state, actions], training=True)
             actor_loss = -keras.ops.mean(critic_value)
             # actor_loss = -tf.math.reduce_mean(critic_value)
 
@@ -281,10 +387,10 @@ class DDPGAgent(Agent):
 
     def plot_models(self):
         actor_model_path = (
-            f"{self.base_path}/{self.cfg['model_save_base_path']}/actor_model.png"
+            f"{self.base_path}/{self.cfg['model_save_base_path']}/ddpg_actor_model.png"
         )
         critic_model_path = (
-            f"{self.base_path}/{self.cfg['model_save_base_path']}/critic_model.png"
+            f"{self.base_path}/{self.cfg['model_save_base_path']}/ddpg_critic_model.png"
         )
 
         keras.utils.plot_model(
@@ -354,6 +460,12 @@ class TD3Agent(Agent):
         self.actor_optimizer = keras.optimizers.Adam(learning_rate=self.actor_lr)
         self.critic_1_optimizer = keras.optimizers.Adam(learning_rate=self.critic_lr)
         self.critic_2_optimizer = keras.optimizers.Adam(learning_rate=self.critic_lr)
+
+        # Ros publishers
+        self.action_publisher = rospy.Publisher("/action", Float32, queue_size=5)
+        self.noisy_action_publisher = rospy.Publisher(
+            "/noisy_action", Float32, queue_size=5
+        )
 
         # Load models
         self.actor = None
@@ -476,6 +588,10 @@ class TD3Agent(Agent):
     def get_action(self, state, training=True):
         action = self.actor(state, training=training)
 
+        action_msg = Float32()
+        action_msg.data = action.numpy()[0]
+        self.action_publisher.publish(action_msg)
+
         # Paper states to use Ornstein-Uhlenbeck noise  (https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process)
         # White noise is enough
         noise = tf.random.normal((self.action_size,), 0.0, self.noise_std_deviation)
@@ -484,6 +600,10 @@ class TD3Agent(Agent):
         noisy_action = tf.clip_by_value(
             noisy_action, -self.max_action_value, self.max_action_value
         )
+
+        noisy_action_msg = Float32()
+        noisy_action_msg.data = noisy_action
+        self.noisy_action_publisher.publish(noisy_action_msg)
 
         return noisy_action[0]
 

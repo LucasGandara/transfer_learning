@@ -12,6 +12,8 @@ from std_msgs.msg import Float32
 from std_srvs.srv import Empty
 from tf.transformations import euler_from_quaternion
 
+from transfer_learning.msg import State
+
 try:
     from src.consts import get_stage, get_stage_name
     from src.respawn_goal import RespawnGoal
@@ -47,14 +49,15 @@ class Env(object):
         rospy.loginfo("Environment stage: {}".format(get_stage_name(cfg["stage"])))
         self.respawn_goal = RespawnGoal(stage)
 
-        # Node publisher
-        self.cmd_vel_publisher = rospy.Publisher("cmd_vel", Twist, queue_size=5)
-        self.reward_publisher = rospy.Publisher("reward", Float32, queue_size=5)
+        # Topic publisher
+        self.cmd_vel_publisher = rospy.Publisher("/cmd_vel", Twist, queue_size=5)
+        self.reward_publisher = rospy.Publisher("/reward", Float32, queue_size=5)
         self.goal_position_publisher = rospy.Publisher(
             "/current_goal_position", Float32, queue_size=5
         )
+        self.state_publisher = rospy.Publisher("/env_state", State, queue_size=5)
 
-        # Node subscriptions
+        # Topic subscriptions
         self.reset_proxy = rospy.ServiceProxy("gazebo/reset_simulation", Empty)
         rospy.Subscriber("odom", Odometry, self.odom_callback)
 
@@ -103,19 +106,21 @@ class Env(object):
         )
 
         # reward = reward * (1 - step / self.cfg["max_steps_per_episode"])
+        if reward > 0:
+            reward *= 2
 
         if done:
             # if self.timeout:
             #     self.cmd_vel_publisher.publish(Twist())
             #     reward = -150
             # else:
-            rospy.loginfo("Collision!!")
-            reward = -150
+            rospy.loginfo("Collision!! -200 reward!!")
+            reward = -200
             self.cmd_vel_publisher.publish(Twist())
 
         if self.get_goalbox:
-            rospy.loginfo("Goal!!!! +1000 reward!!")
-            reward = 100
+            rospy.loginfo("Goal!!!! 200 reward!!")
+            reward = 200
             self.cmd_vel_publisher.publish(Twist())
             self.goal_x, self.goal_y = self.respawn_goal.get_position(True, delete=True)
             self.goal_distance = self.get_goal_distance()
@@ -159,6 +164,16 @@ class Env(object):
         current_distance = self.get_goal_distance()
         if current_distance < 0.15:
             self.get_goalbox = True
+
+        # Log the state
+        state_msg = State()
+        state_msg.ranges = scan_range
+        state_msg.obstacle_min_range = obstacle_min_range
+        state_msg.obstacle_angle = obstacle_angle
+        state_msg.heading = heading
+        state_msg.current_distance = current_distance
+        state_msg.done = done
+        self.state_publisher.publish(state_msg)
 
         return (
             scan_range
