@@ -48,8 +48,7 @@ def create_actor_model(input_shape, max_w, max_v, name):
         name="output",
     )(out)
 
-    outputs = outputs * max_w  # 2 is the max value the action can take: see below link
-    # https://gymnasium.farama.org/environments/classic_control/pendulum/
+    outputs = outputs * max_w  # 2 is the max value the action can take
 
     model = keras.Model(inputs, outputs, name=name)
 
