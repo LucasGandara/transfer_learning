@@ -123,7 +123,7 @@
         <enable_wind>0</enable_wind>
         <kinematic>0</kinematic>
       </link>
-      <pose>2.68658 -0.228194 0 0 -0 0</pose>
+      <pose>5.28533 -0.017508 0 0 0 0</pose>
     </model>
     <model name='main_track_delimiters'>
       <static>1</static>
@@ -161,7 +161,7 @@
         <enable_wind>0</enable_wind>
         <kinematic>0</kinematic>
       </link>
-      <pose>5.29326 0.002308 0 0 -0 0</pose>
+      <pose>5.29326 0.002308 0.241134 0 -0 0</pose>
     </model>
     <state world_name='default'>
       <sim_time>75 977000000</sim_time>
@@ -179,10 +179,10 @@
         </link>
       </model>
       <model name='main_track'>
-        <pose>5.28533 -0.017508 0 0 -0 0</pose>
+        <pose>5.28533 -0.017508 0 0 0 0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
-          <pose>5.28533 -0.017508 0 0 -0 0</pose>
+          <pose>5.28533 -0.017508 0 0 0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
