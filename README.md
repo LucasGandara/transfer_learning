@@ -10,6 +10,9 @@ an agent which knowledge is transfered from a source model rather than training 
 - [miniconda](https://docs.anaconda.com/miniconda/).
 - [ROS Noetic - Full Desktop](http://wiki.ros.org/noetic/Installation/Ubuntu)
 
+### TODO:
+copy models to $HOME/.gazebo/models
+
 ### QuickStart
 Download this repo with git:
 ```sh
