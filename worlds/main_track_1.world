@@ -123,7 +123,7 @@
         <enable_wind>0</enable_wind>
         <kinematic>0</kinematic>
       </link>
-      <pose>0.165801 -0.034808 0 0 -0 0</pose>
+      <pose>2.68658 -0.228194 0 0 -0 0</pose>
     </model>
     <model name='main_track_delimiters'>
       <static>1</static>
@@ -161,13 +161,13 @@
         <enable_wind>0</enable_wind>
         <kinematic>0</kinematic>
       </link>
-      <pose>5.29128 0.010652 0 0 -0 0</pose>
+      <pose>5.29326 0.002308 0 0 -0 0</pose>
     </model>
     <state world_name='default'>
-      <sim_time>99 400000000</sim_time>
-      <real_time>99 711140574</real_time>
-      <wall_time>1743304563 792834376</wall_time>
-      <iterations>99400</iterations>
+      <sim_time>75 977000000</sim_time>
+      <real_time>76 225438787</real_time>
+      <wall_time>1743305935 644357119</wall_time>
+      <iterations>75977</iterations>
       <model name='ground_plane'>
         <pose>0 0 0 0 -0 0</pose>
         <scale>1 1 1</scale>
@@ -179,20 +179,20 @@
         </link>
       </model>
       <model name='main_track'>
-        <pose>5.29619 -0.011104 0 0 -0 0</pose>
+        <pose>5.28533 -0.017508 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
-          <pose>5.29619 -0.011104 0 0 -0 0</pose>
+          <pose>5.28533 -0.017508 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='main_track_delimiters'>
-        <pose>5.29128 0.010652 0.241134 0 -0 0</pose>
+        <pose>5.29326 0.002308 0.241134 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
-          <pose>5.29128 0.010652 0.241134 0 -0 0</pose>
+          <pose>5.29326 0.002308 0.241134 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
@@ -204,7 +204,7 @@
     </state>
     <gui fullscreen='0'>
       <camera name='user_camera'>
-        <pose>-2.01847 -8.67805 14.6218 0 0.839643 0.792193</pose>
+        <pose>-4.33038 -1.9558 2.86623 0 0.451642 0.640196</pose>
         <view_controller>orbit</view_controller>
         <projection_type>perspective</projection_type>
       </camera>
