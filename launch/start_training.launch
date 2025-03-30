@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+  <node name="drl_training" pkg="transfer_learning" type="turtlebot3_rl.py" output="screen"/>
+</launch>

@@ -10,9 +10,6 @@ an agent which knowledge is transfered from a source model rather than training 
 - [miniconda](https://docs.anaconda.com/miniconda/).
 - [ROS Noetic - Full Desktop](http://wiki.ros.org/noetic/Installation/Ubuntu)
 
-### TODO:
-copy models to $HOME/.gazebo/models
-
 ### QuickStart
 Download this repo with git:
 ```sh
@@ -31,6 +28,11 @@ pip install -r requirements.txt
 launch `main_track.launch` launch file:
 ```sh
 roslaunch transfer_learning main_track.launch
+```
+
+Start the training by starting the training node:
+```sh
+roslaunch transfer_learning start_training.launch
 ```
 
 ## Potential Mobile bases

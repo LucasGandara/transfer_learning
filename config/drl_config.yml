@@ -1,29 +1,43 @@
 # start or keep
 load_model: true
-model_name: dqn_tb3
+model_name: td3_tb3
 
 # Env
-CARLA_TIMEOUT: 20.0
+stage: 1 # 0: main track, 1: tb3 world
+
+# Reward function
+w_angular: 2.0
+w_distance: 3.0
+alpha_reward: 0.5
 
 # DRL Agent
-learning_rate: 0.001
+agent: TD3
+critic_lr: 0.005
+actor_lr: 0.001
+gamma: 0.99
+tau: 0.005
+std_dev: 0.2
+
 batch_size: 64
-current_episode: 550
-num_episodes: 200
-episode_step: 500
-update_target_every: 20
+current_episode: 166
+num_episodes: 80
+max_steps_per_episode: 450
+reward_decay_factor: 0.01
+episode_step: 200
 save_model_every: 30
 aggregate_stats_every: 10
-gamma: 0.99
-epsilon: 1
-epsilon_decay: 0.995
-min_epsilon: 0.1
-discount_factor: 0.99
 memory_size: 1000000
+max_linear_vel: 1.5
+max_angular_vel: 2.2
+
+# DQN Agent
+min_epsilon: 0.1
+epsilon_decay: 0.999
 
 # Logs
 base_log_dir: logs
-model_save_path: keras_models/dqn_tb3.keras
+model_save_base_path: keras_models
+model_save_path: keras_models/ddpg_tb3.keras
 SHOW_QS_VALUES: true
 
 # Miscelanious
