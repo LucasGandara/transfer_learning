@@ -120,7 +120,7 @@ class Env(object):
 
         if self.get_goalbox:
             rospy.loginfo("Goal!!!! 200 reward!!")
-            reward = 1000
+            reward = 2000
             self.cmd_vel_publisher.publish(Twist())
             self.goal_x, self.goal_y = self.respawn_goal.get_position(True, delete=True)
             self.goal_distance = self.get_goal_distance()
