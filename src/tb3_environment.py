@@ -115,12 +115,12 @@ class Env(object):
             #     reward = -150
             # else:
             rospy.loginfo("Collision!! -200 reward!!")
-            reward = -200
+            reward = -500
             self.cmd_vel_publisher.publish(Twist())
 
         if self.get_goalbox:
             rospy.loginfo("Goal!!!! 200 reward!!")
-            reward = 200
+            reward = 1000
             self.cmd_vel_publisher.publish(Twist())
             self.goal_x, self.goal_y = self.respawn_goal.get_position(True, delete=True)
             self.goal_distance = self.get_goal_distance()

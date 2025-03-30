@@ -1,6 +1,6 @@
 # start or keep
 load_model: true
-model_name: ddpg_tb3
+model_name: td3_tb3
 
 # Env
 stage: 1 # 0: main track, 1: tb3 world
@@ -19,8 +19,8 @@ tau: 0.005
 std_dev: 0.2
 
 batch_size: 64
-current_episode: 87
-num_episodes: 500
+current_episode: 166
+num_episodes: 80
 max_steps_per_episode: 450
 reward_decay_factor: 0.01
 episode_step: 200

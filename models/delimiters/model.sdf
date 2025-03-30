@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <sdf version="1.5">
-  <model name="main_track">
+  <model name="main_track_delimiters">
     <static>true</static>
     <link name="link">
       <collision name="collision">

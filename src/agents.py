@@ -323,37 +323,67 @@ class DDPGAgent(Agent):
             self.actor_loss_memory += actor_loss.numpy()
 
     @tf.function
-    def train_step(self, state, action, reward, next_states, _):
+    def train_step(self, states, actions, rewards, next_states, dones):
 
         # Update Critic
-        with tf.GradientTape() as tape:
-            target_action_values = self.target_actor(next_states, training=True)
-            y = reward + self.gamma * self.target_critic(
-                [next_states, target_action_values], training=True
+        with tf.GradientTape() as critic_tape:
+            target_actions = self.target_actor(next_states, training=True)
+
+            noise = tf.clip_by_value(
+                tf.random.normal((self.n_actions,), 0.0, self.std_dv), -0.5, 0.5
             )
 
-            critic_value = self.critic([state, action], training=True)
-            critic_loss = keras.ops.mean(keras.ops.square(y - critic_value))
-            # critic_loss = keras.losses.mean_squared_error(y, critic_value)
+            noisy_target_actions = tf.clip_by_value(
+                target_actions + noise, self.min_action_value, self.max_action_value
+            )
 
-        critic_grads = tape.gradient(critic_loss, self.critic.trainable_variables)
-        self.critic_optimizer.apply_gradients(
-            zip(critic_grads, self.critic.trainable_variables)
+            y = rewards + self.gamma * (1 - dones) * tf.minimum(
+                self.target_critic_1(
+                    [next_states, noisy_target_actions], training=True
+                ),
+                self.target_critic_2(
+                    [next_states, noisy_target_actions], training=True
+                ),
+            )
+
+            critic_value_1 = self.critic_1([states, actions], training=True)
+            critic_value_2 = self.critic_2([states, actions], training=True)
+
+            critic_loss = keras.ops.mean(
+                keras.ops.square(y - critic_value_1)
+            ) + keras.ops.mean(keras.ops.square(y - critic_value_2))
+
+        critic_gradients = critic_tape.gradient(
+            critic_loss,
+            self.critic_1.trainable_variables + self.critic_2.trainable_variables,
         )
 
-        # Update Actor
-        with tf.GradientTape() as tape:
-            actions = self.actor(state, training=True)
-            critic_value = self.critic([state, actions], training=True)
-            actor_loss = -keras.ops.mean(critic_value)
-            # actor_loss = -tf.math.reduce_mean(critic_value)
-
-        actor_gradients = tape.gradient(actor_loss, self.actor.trainable_variables)
-        self.actor_optimizer.apply_gradients(
-            zip(actor_gradients, self.actor.trainable_variables)
+        self.critic_1_optimizer.apply_gradients(
+            zip(critic_gradients, self.critic_1.trainable_variables)
+        )
+        self.critic_2_optimizer.apply_gradients(
+            zip(critic_gradients, self.critic_2.trainable_variables)
         )
 
-        return critic_loss, actor_loss
+        # Update the Actor if is time
+        if self.train_epochs % self.update_policy_frequency == 0:
+            with tf.GradientTape() as actor_tape:
+                actor_loss = -tf.math.reduce_mean(
+                    self.critic_1(
+                        [states, self.actor(states, training=True)], training=True
+                    )
+                )
+
+            actor_grads = actor_tape.gradient(
+                actor_loss, self.actor.trainable_variables
+            )
+            self.actor_optimizer.apply_gradients(
+                zip(actor_grads, self.actor.trainable_variables)
+            )
+
+            return critic_loss, actor_loss
+
+        return critic_loss, 0.0
 
     def update_targets(self):
         """
@@ -435,7 +465,9 @@ class TD3Agent(Agent):
         # Logs
         self.base_path = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
         date_time = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
-        self.log_dir = f"{self.base_path}/{self.cfg['base_log_dir']}/td3_{date_time}"
+        self.log_dir = (
+            f"{self.base_path}/{self.cfg['base_log_dir']}/td3_{date_time}_stage2"
+        )
         print(f"Logging metrics to {self.log_dir}")
         self.summary_writer = tf.summary.create_file_writer(self.log_dir)
 
