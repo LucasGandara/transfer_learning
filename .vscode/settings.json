@@ -7,18 +7,28 @@
     ],
     "cSpell.words": [
         "amax",
+        "ddpg",
         "dones",
+        "fanin",
         "goalbox",
+        "imread",
         "lecun",
         "logdebug",
         "logerr",
         "loginfo",
+        "maxval",
         "MINIBATCH",
+        "minval",
+        "mpimg",
         "Odometry",
+        "Ornstein",
         "Qvalue",
         "Respawn",
         "rospy",
+        "RVIZ",
         "srvs",
-        "tensorboard"
+        "tensorboard",
+        "Turtlebot",
+        "Uhlenbeck"
     ]
 }

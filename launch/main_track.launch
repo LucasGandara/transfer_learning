@@ -1,12 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
+  <!-- RVIZ -->
+  <arg name="rviz" default="false"/>
+
+
+  <!-- Turtlebot 3 Spawn coords -->
   <arg name="model" default="$(env TURTLEBOT3_MODEL)" doc="model type [burger, waffle, waffle_pi]"/>
-  <arg name="x_pos" default="0.0"/>
-  <arg name="y_pos" default="0.0"/>
-  <arg name="z_pos" default="0.0"/>
+  <arg name="x_pos" default="0.516246"/>
+  <arg name="y_pos" default="-0.697190"/>
+  <arg name="z_pos" default="0.287165"/>
 
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
-    <arg name="world_name" value="$(find turtlebot3_gazebo)/worlds/turtlebot3_stage_2.world"/>
+    <arg name="world_name" value="$(find transfer_learning)/worlds/main_track_1.world"/>
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
     <arg name="gui" value="true"/>
@@ -14,14 +19,25 @@
     <arg name="debug" value="false"/>
   </include>
 
-
+  <!-- Robot model as param -->
   <param name="robot_description" command="$(find xacro)/xacro --inorder $(find turtlebot3_description)/urdf/turtlebot3_$(arg model).urdf.xacro" />
 
+  <!-- Robot transformations -->
   <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
     <param name="publish_frequency" type="double" value="50.0" />
     <param name="tf_prefix" value=""/>
   </node>
 
   <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-urdf -model turtlebot3_burger -x $(arg x_pos) -y $(arg y_pos) -z $(arg z_pos) -param robot_description" />
+
+  <node
+    name="rviz"
+    pkg="rviz"
+    type="rviz"
+    args="-d $(find transfer_learning)/rviz/ddpg_tb3.rviz"
+    output="log"
+    respawn="true" if="$(arg rviz)"
+  />
+
 </launch>
 
