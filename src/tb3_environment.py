@@ -2,6 +2,17 @@
 # Authors: Lucas G. #
 
 import math
+import os
+import sys
+
+# Add ROS package paths
+current_dir = os.path.dirname(os.path.abspath(__file__))
+workspace_dir = os.path.dirname(os.path.dirname(current_dir))
+devel_path = os.path.join(
+    os.path.dirname(workspace_dir), "devel/lib/python3/dist-packages"
+)
+sys.path.append(devel_path)
+sys.path.append(workspace_dir)
 
 import numpy as np
 import rospy
@@ -12,7 +23,13 @@ from std_msgs.msg import Float32
 from std_srvs.srv import Empty
 from tf.transformations import euler_from_quaternion
 
-from transfer_learning.msg import State
+try:
+    from transfer_learning.msg import State
+except ImportError:
+    rospy.logerr(
+        "Could not import State message. Make sure the message is compiled and the workspace is sourced."
+    )
+    sys.exit(1)
 
 try:
     from src.consts import get_stage, get_stage_name
@@ -29,13 +46,15 @@ class Env(object):
         # Configuration
         self.cfg = cfg
 
-        self.state_size = 28
+        self.state_size = 29  # Increased by 1 for time steps
         self.action_size = 1
         self.past_action = [0] * self.action_size
         self.steps = 0
         self.timeout = False
         self.get_goalbox = False
         self.init_goal = True  # First time the Goal is initialized
+        self.had_collision = False  # Track if there was any collision in current lap
+        self.goal_index = 0  # Track current goal index
 
         # Goal
         self.goal_x = 0.0
@@ -114,18 +133,37 @@ class Env(object):
             #     self.cmd_vel_publisher.publish(Twist())
             #     reward = -150
             # else:
-            rospy.loginfo("Collision!! -200 reward!!")
+            rospy.loginfo("Collision!! -500 reward!!")
             reward = -500
             self.cmd_vel_publisher.publish(Twist())
+            self.had_collision = True
 
         if self.get_goalbox:
-            rospy.loginfo("Goal!!!! 200 reward!!")
-            reward = 2000
+            self.goal_index += 1
+            rospy.loginfo(f"Goal {self.goal_index} reached!")
+
+            # Base reward for reaching a goal
+            reward = 150
+
+            # Check if we completed a full lap
+            if self.goal_index >= len(GOAL_X_LIST[self.respawn_goal.stage]):
+                if not self.had_collision:
+                    rospy.loginfo(
+                        "Full lap completed without collisions! Extra reward +300!"
+                    )
+                    reward += 300
+                else:
+                    rospy.loginfo("Full lap completed but had collisions")
+                self.goal_index = 0
+
             self.cmd_vel_publisher.publish(Twist())
             self.goal_x, self.goal_y = self.respawn_goal.get_position(True, delete=True)
             self.goal_distance = self.get_goal_distance()
             self.get_goalbox = False
             self.steps = 0
+
+            if self.goal_index == 0:  # Reset collision flag when starting new lap
+                self.had_collision = False
 
         reward_msg = Float32()
         reward_msg.data = reward
@@ -153,17 +191,12 @@ class Env(object):
         if min_range > min(scan_range) > 0:
             done = True
 
-        # for action in self.past_action:
-        #     scan_range.append(action)
-
-        # if self.steps > self.cfg["max_steps_per_episode"]:
-        #     rospy.loginfo("Time out!!")
-        #     self.timeout = True
-        #     done = True
-
         current_distance = self.get_goal_distance()
         if current_distance < 0.15:
             self.get_goalbox = True
+
+        # Normalize time steps between 0 and 1 based on max steps
+        normalized_time = self.steps / self.cfg["max_steps_per_episode"]
 
         # Log the state
         state_msg = State()
@@ -172,12 +205,19 @@ class Env(object):
         state_msg.obstacle_angle = obstacle_angle
         state_msg.heading = heading
         state_msg.current_distance = current_distance
+        state_msg.time_steps = normalized_time
         state_msg.done = done
         self.state_publisher.publish(state_msg)
 
         return (
             scan_range
-            + [obstacle_min_range, obstacle_angle, heading, current_distance],
+            + [
+                obstacle_min_range,
+                obstacle_angle,
+                heading,
+                current_distance,
+                normalized_time,
+            ],
             done,
         )
 
@@ -228,6 +268,8 @@ class Env(object):
         state, _ = self.get_state(data)
 
         self.steps = 0
+        self.had_collision = False  # Reset collision flag
+        self.goal_index = 0  # Reset goal index
 
         return np.asarray(state)
 

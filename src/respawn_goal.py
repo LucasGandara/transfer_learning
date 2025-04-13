@@ -34,6 +34,7 @@ class RespawnGoal(object):
         self.goal_position.position.z = 0.11
 
         self.goal_index = 0
+        self.total_goals = len(GOAL_X_LIST[self.stage])
         self.last_goal_x = self.init_goal_x
         self.last_goal_y = self.init_goal_y
 
