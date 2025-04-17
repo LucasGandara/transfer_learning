@@ -56,7 +56,6 @@ def combined_reward_function(
     The reward function combines multiple factors to guide robot navigation:
     - Angular components (heading and velocity)
     - Distance improvement towards the goal
-    - Time penalty to encourage faster completion
 
     Args:
         theta (float): Heading angle in radians (difference between robot
@@ -82,12 +81,7 @@ def combined_reward_function(
     # Distance reward (linear reward)
     distance_reward = start_distance - current_distance
 
-    # Time penalty - scales with distance to encourage faster movement
-    time_penalty = -0.1 * current_distance
-
     # Combined reward with time penalty
-    total_reward = (
-        w_angular * angular_reward + w_distance * distance_reward + time_penalty
-    )
+    total_reward = w_angular * angular_reward + w_distance * distance_reward
 
     return float(total_reward)

@@ -46,7 +46,7 @@ def start_drl(env: Env, agent: Agent, cfg: dict):
             agent.update_targets()
             episode_steps += 1
 
-            if done:
+            if done or env.truncated:
                 break
 
             observation = observation_
