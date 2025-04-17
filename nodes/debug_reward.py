@@ -26,8 +26,10 @@ class DebugReward(object):
         self.orientation = -100
         self.goal_angle = -100
         self.heading = -100
-        self.state = [0.0 for i in range(28)]
+        self.state = [0.0 for i in range(29)]  # Updated for time steps
         self.angular_action = 0.15
+        self.steps = 0
+        self.max_steps = 450  # From config default
 
         self.angular_reward = 0.0
         self.linear_reward = -10.0
@@ -46,6 +48,9 @@ class DebugReward(object):
             "/goal_angle", Float64, queue_size=10
         )
         self.heading_publisher = rospy.Publisher("/heading", Float64, queue_size=10)
+        self.time_steps_publisher = rospy.Publisher(
+            "/time_steps", Float64, queue_size=10
+        )
 
         self.cmd_vel_publisher = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
 
@@ -123,8 +128,10 @@ class DebugReward(object):
             done = True
 
         current_distance = self.get_goal_distance()
+        self.steps += 1
+        normalized_time = self.steps / self.max_steps
 
-        self.state = scan_range + [heading, current_distance]
+        self.state = scan_range + [heading, current_distance, normalized_time]
 
     def get_reward(self):
         current_distance = self.state[-1]
@@ -153,6 +160,8 @@ class DebugReward(object):
         goal_angle_msg.data = self.goal_angle
         heading_msg = Float64()
         heading_msg.data = self.heading
+        time_steps_msg = Float64()
+        time_steps_msg.data = self.steps / self.max_steps
 
         angular_reward_msg = Float64()
         angular_reward_msg.data = self.angular_reward
@@ -169,6 +178,7 @@ class DebugReward(object):
         self.orientation_publisher.publish(orientation_msg)
         self.goal_angle_publisher.publish(goal_angle_msg)
         self.heading_publisher.publish(heading_msg)
+        self.time_steps_publisher.publish(time_steps_msg)
         self.angle_reward_publisher.publish(angular_reward_msg)
         self.linear_reward_publisher.publish(linear_reward_msg)
         self.reward_publisher.publish(reward_msg)
