@@ -71,7 +71,7 @@ def combined_reward_function(
             Defaults to 1.0
 
     Returns:
-        float: The combined reward considering both heading/velocity and distance
+        float: The combined reward considering heading/velocity, distance and time
     """
     # Angular reward
     heading_reward = -abs(theta)
@@ -81,7 +81,7 @@ def combined_reward_function(
     # Distance reward (linear reward)
     distance_reward = start_distance - current_distance
 
-    # Combined reward
+    # Combined reward with time penalty
     total_reward = w_angular * angular_reward + w_distance * distance_reward
 
-    return total_reward[0]
+    return float(total_reward)

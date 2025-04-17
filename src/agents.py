@@ -35,6 +35,7 @@ class Agent(ABC):
         self.state_size = state_size
         self.action_size = action_size
         self.cfg = cfg
+        self.episode_score: int
 
         self.actor_loss_memory: int = None
         self.critic_loss_memory: int = None
@@ -470,6 +471,7 @@ class TD3Agent(Agent):
         )
         print(f"Logging metrics to {self.log_dir}")
         self.summary_writer = tf.summary.create_file_writer(self.log_dir)
+        self.episode_score = 0
 
         # RL Agent
         self.noise_std_deviation = self.cfg["std_dev"]
@@ -631,13 +633,13 @@ class TD3Agent(Agent):
         noisy_action = action + noise
         noisy_action = tf.clip_by_value(
             noisy_action, -self.max_action_value, self.max_action_value
-        )
+        )[0]
 
         noisy_action_msg = Float32()
         noisy_action_msg.data = noisy_action
         self.noisy_action_publisher.publish(noisy_action_msg)
 
-        return noisy_action[0]
+        return noisy_action
 
     def store_transition(self, state, action, reward, new_state, done):
         self.memory.store_transition(state, action, reward, new_state, done)
@@ -669,56 +671,127 @@ class TD3Agent(Agent):
         with tf.GradientTape() as critic_tape:
             target_actions = self.target_actor(next_states, training=True)
 
+            # Target policy smoothing - Add noise to target actions
             noise = tf.clip_by_value(
                 tf.random.normal((self.action_size,), 0.0, self.noise_std_deviation),
                 -0.5,
                 0.5,
             )
-
             noisy_target_actions = tf.clip_by_value(
                 target_actions + noise, -self.max_action_value, self.max_action_value
             )
 
-            y = rewards + self.gamma * (1 - dones) * tf.minimum(
-                self.target_critic_1(
-                    [next_states, noisy_target_actions], training=True
-                ),
-                self.target_critic_2(
-                    [next_states, noisy_target_actions], training=True
-                ),
+            # Get target Q-values from both critics
+            target_q1 = self.target_critic_1(
+                [next_states, noisy_target_actions], training=True
+            )
+            target_q2 = self.target_critic_2(
+                [next_states, noisy_target_actions], training=True
             )
 
-            critic_value_1 = self.critic_1([states, actions], training=True)
-            critic_value_2 = self.critic_2([states, actions], training=True)
+            # Use minimum of two Q-values to prevent overestimation
+            min_target_q = tf.minimum(target_q1, target_q2)
 
+            # Compute target values
+            y = rewards + self.gamma * (1 - dones) * min_target_q
+
+            # Current Q-values from both critics
+            current_q1 = self.critic_1([states, actions], training=True)
+            current_q2 = self.critic_2([states, actions], training=True)
+
+            # Compute MSE loss for both critics
             critic_loss = keras.ops.mean(
-                keras.ops.square(y - critic_value_1)
-            ) + keras.ops.mean(keras.ops.square(y - critic_value_2))
+                keras.ops.square(y - current_q1)
+            ) + keras.ops.mean(keras.ops.square(y - current_q2))
+
+            # Log metrics
+            tf.summary.scalar(
+                "Target Q1 Mean", tf.reduce_mean(target_q1), step=self.train_epochs
+            )
+            tf.summary.scalar(
+                "Target Q2 Mean", tf.reduce_mean(target_q2), step=self.train_epochs
+            )
+            tf.summary.scalar(
+                "Current Q1 Mean", tf.reduce_mean(current_q1), step=self.train_epochs
+            )
+            tf.summary.scalar(
+                "Current Q2 Mean", tf.reduce_mean(current_q2), step=self.train_epochs
+            )
+            tf.summary.scalar(
+                "Q Value Difference",
+                tf.reduce_mean(tf.abs(current_q1 - current_q2)),
+                step=self.train_epochs,
+            )
+            tf.summary.scalar(
+                "Target Policy Noise", tf.reduce_mean(noise), step=self.train_epochs
+            )
+            tf.summary.histogram("Q1 Distribution", current_q1, step=self.train_epochs)
+            tf.summary.histogram("Q2 Distribution", current_q2, step=self.train_epochs)
 
         critic_gradients = critic_tape.gradient(
             critic_loss,
             self.critic_1.trainable_variables + self.critic_2.trainable_variables,
         )
 
-        self.critic_1_optimizer.apply_gradients(
-            zip(critic_gradients, self.critic_1.trainable_variables)
+        # Log critic gradient norms
+        critic_1_grad_norm = tf.linalg.global_norm(
+            critic_gradients[: len(self.critic_1.trainable_variables)]
         )
-        self.critic_2_optimizer.apply_gradients(
-            zip(critic_gradients, self.critic_2.trainable_variables)
+        critic_2_grad_norm = tf.linalg.global_norm(
+            critic_gradients[len(self.critic_1.trainable_variables) :]
+        )
+        tf.summary.scalar(
+            "Critic 1 Gradient Norm", critic_1_grad_norm, step=self.train_epochs
+        )
+        tf.summary.scalar(
+            "Critic 2 Gradient Norm", critic_2_grad_norm, step=self.train_epochs
         )
 
-        # Update the Actor if is time
+        self.critic_1_optimizer.apply_gradients(
+            zip(
+                critic_gradients[: len(self.critic_1.trainable_variables)],
+                self.critic_1.trainable_variables,
+            )
+        )
+        self.critic_2_optimizer.apply_gradients(
+            zip(
+                critic_gradients[len(self.critic_1.trainable_variables) :],
+                self.critic_2.trainable_variables,
+            )
+        )
+
+        # Update the Actor if it's time (delayed policy updates)
         if self.train_epochs % self.update_policy_frequency == 0:
             with tf.GradientTape() as actor_tape:
+                # Get actions from current policy
+                policy_actions = self.actor(states, training=True)
+                # Actor loss is negative of Q1 values
                 actor_loss = -tf.math.reduce_mean(
-                    self.critic_1(
-                        [states, self.actor(states, training=True)], training=True
-                    )
+                    self.critic_1([states, policy_actions], training=True)
+                )
+
+                # Log actor-specific metrics
+                tf.summary.scalar(
+                    "Policy Actions Mean",
+                    tf.reduce_mean(policy_actions),
+                    step=self.train_epochs,
+                )
+                tf.summary.histogram(
+                    "Policy Actions Distribution",
+                    policy_actions,
+                    step=self.train_epochs,
                 )
 
             actor_grads = actor_tape.gradient(
                 actor_loss, self.actor.trainable_variables
             )
+
+            # Log actor gradient norm
+            actor_grad_norm = tf.linalg.global_norm(actor_grads)
+            tf.summary.scalar(
+                "Actor Gradient Norm", actor_grad_norm, step=self.train_epochs
+            )
+
             self.actor_optimizer.apply_gradients(
                 zip(actor_grads, self.actor.trainable_variables)
             )

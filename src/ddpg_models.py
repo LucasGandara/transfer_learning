@@ -35,7 +35,7 @@ class FanInDense(keras.layers.Layer):
 
 
 def create_actor_model(input_shape, max_w, max_v, name):
-    ### Actor network. It should return a value for each action
+    ### Actor network with time awareness
     inputs = keras.layers.Input(shape=input_shape, name="input")
     out = keras.layers.Dense(256, activation="relu", name="dense_1")(inputs)
     out = keras.layers.Dense(256, activation="relu", name="dense_2")(out)
@@ -48,16 +48,16 @@ def create_actor_model(input_shape, max_w, max_v, name):
         name="output",
     )(out)
 
-    outputs = outputs * max_w  # 2 is the max value the action can take
+    outputs = outputs * max_w  # Scale the output to max angular velocity
 
     model = keras.Model(inputs, outputs, name=name)
 
     return model
 
 
-# Critic model
+# Critic model updated for time-aware state
 def create_critic_model(state_input_shape, action_input_shape, name):
-    ### Critic on the state - action pair. It should return a value of the pair
+    ### Critic on the state - action pair, now including time information
     state_input = keras.layers.Input(shape=state_input_shape, name="state_input")
     state_out = keras.layers.Dense(16, activation="relu", name="state_out")(state_input)
     state_value = keras.layers.Dense(32, activation="relu", name="state_value")(
@@ -69,6 +69,7 @@ def create_critic_model(state_input_shape, action_input_shape, name):
         action_input
     )
 
+    # Combine state (including time) and action
     intermediate = keras.layers.Concatenate()([state_value, action_value])
 
     out = keras.layers.Dense(256, activation="relu")(intermediate)

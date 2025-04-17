@@ -25,45 +25,71 @@ def start_drl(env: Env, agent: Agent, cfg: dict):
     for episode in range(
         cfg["current_episode"] + 1, cfg["current_episode"] + cfg["num_episodes"]
     ):
-        score = 0.0
+        agent.episode_score = 0.0
         observation = env.reset()
         agent.actor_loss_memory = 0
         agent.critic_loss_memory = 0
+        episode_steps = 0
+        episode_actions = []
 
         while True:
             action = agent.get_action(
                 keras.ops.expand_dims(keras.ops.convert_to_tensor(observation), 0)
             )
+            episode_actions.append(action)
             observation_, reward, done = env.step(action)
-            score += reward
+            agent.episode_score += reward
             agent.store_transition(
                 observation, action, reward, observation_, 1 if done else 0
             )
             agent.learn()
             agent.update_targets()
+            episode_steps += 1
 
-            if done:
+            if done or env.truncated:
                 break
 
             observation = observation_
 
-        scores.append(score)
+        scores.append(agent.episode_score)
+        episode_actions = tf.stack(episode_actions)
+        avg_score = np.mean(scores[-50:]) if len(scores) >= 50 else np.mean(scores)
 
-        avg_score = np.mean(scores)
-        rospy.loginfo("Episode: {}. Avg: {}".format(episode, avg_score))
+        rospy.loginfo(
+            f"Episode: {episode}. Score: {agent.episode_score:.2f}. Avg: {avg_score:.2f}"
+        )
 
         with agent.summary_writer.as_default():
-            tf.summary.scalar("Reward per episode", score, step=episode)
-            tf.summary.scalar("Avg_reward (past 50 episodes)", avg_score, step=episode)
+            # Existing metrics
+            tf.summary.scalar("Reward per episode", agent.episode_score, step=episode)
+            tf.summary.scalar("Avg reward (past 50 episodes)", avg_score, step=episode)
             tf.summary.scalar(
-                "Accumulated critic_loss per episode",
+                "Accumulated critic loss per episode",
                 agent.critic_loss_memory,
                 step=episode,
             )
             tf.summary.scalar(
-                "Accumulated actor_loss per episode",
+                "Accumulated actor loss per episode",
                 agent.actor_loss_memory,
                 step=episode,
+            )
+
+            # New episode-level metrics
+            tf.summary.scalar("Episode steps", episode_steps, step=episode)
+            tf.summary.scalar(
+                "Mean action", tf.reduce_mean(episode_actions), step=episode
+            )
+            tf.summary.scalar(
+                "Action std dev", tf.math.reduce_std(episode_actions), step=episode
+            )
+            tf.summary.scalar(
+                "Max action", tf.reduce_max(episode_actions), step=episode
+            )
+            tf.summary.scalar(
+                "Min action", tf.reduce_min(episode_actions), step=episode
+            )
+            tf.summary.histogram(
+                "Episode actions distribution", episode_actions, step=episode
             )
 
         if episode % cfg["save_model_every"] == 0 and episode > 10:

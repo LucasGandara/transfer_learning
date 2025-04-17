@@ -18,10 +18,10 @@ gamma: 0.99
 tau: 0.005
 std_dev: 0.2
 
-batch_size: 64
+batch_size: 128
 current_episode: 0
 num_episodes: 200
-max_steps_per_episode: 450
+max_steps_per_episode: 500
 reward_decay_factor: 0.01
 episode_step: 200
 save_model_every: 30
