@@ -5,6 +5,8 @@ import math
 import os
 import sys
 
+from src.consts import GOAL_X_LIST
+
 # Add ROS package paths
 current_dir = os.path.dirname(os.path.abspath(__file__))
 workspace_dir = os.path.dirname(os.path.dirname(current_dir))
@@ -46,7 +48,7 @@ class Env(object):
         # Configuration
         self.cfg = cfg
 
-        self.state_size = 29  # Increased by 1 for time steps
+        self.state_size = 28  # Increased by 1 for time steps
         self.action_size = 1
         self.past_action = [0] * self.action_size
         self.steps = 0
@@ -55,6 +57,7 @@ class Env(object):
         self.init_goal = True  # First time the Goal is initialized
         self.had_collision = False  # Track if there was any collision in current lap
         self.goal_index = 0  # Track current goal index
+        self.truncated = False
 
         # Goal
         self.goal_x = 0.0
@@ -124,21 +127,18 @@ class Env(object):
             alpha=self.cfg["alpha_reward"],
         )
 
-        # reward = reward * (1 - step / self.cfg["max_steps_per_episode"])
         if reward > 0:
             reward *= 2
 
         if done:
-            # if self.timeout:
-            #     self.cmd_vel_publisher.publish(Twist())
-            #     reward = -150
-            # else:
             rospy.loginfo("Collision!! -500 reward!!")
             reward = -500
             self.cmd_vel_publisher.publish(Twist())
             self.had_collision = True
+            self.goal_index = 0  # Reset goal index on collision
 
         if self.get_goalbox:
+            # Increment goal index
             self.goal_index += 1
             rospy.loginfo(f"Goal {self.goal_index} reached!")
 
@@ -152,12 +152,15 @@ class Env(object):
                         "Full lap completed without collisions! Extra reward +300!"
                     )
                     reward += 300
+                    self.truncated = True
                 else:
                     rospy.loginfo("Full lap completed but had collisions")
                 self.goal_index = 0
 
             self.cmd_vel_publisher.publish(Twist())
-            self.goal_x, self.goal_y = self.respawn_goal.get_position(True, delete=True)
+            self.goal_x, self.goal_y = self.respawn_goal.get_position(
+                True, delete=True, goal_index=self.goal_index
+            )
             self.goal_distance = self.get_goal_distance()
             self.get_goalbox = False
             self.steps = 0
@@ -216,7 +219,6 @@ class Env(object):
                 obstacle_angle,
                 heading,
                 current_distance,
-                normalized_time,
             ],
             done,
         )
@@ -248,6 +250,7 @@ class Env(object):
 
     def reset(self):
         rospy.wait_for_service("/gazebo/reset_simulation", timeout=2)
+        self.truncated = False
         try:
             self.reset_proxy()
         except rospy.ServiceException as error:
@@ -261,15 +264,21 @@ class Env(object):
                 pass
 
         if self.init_goal:
-            self.goal_x, self.goal_y = self.respawn_goal.get_position()
+            self.goal_x, self.goal_y = self.respawn_goal.get_position(
+                goal_index=0, delete=False
+            )
             self.init_goal = False
+        else:
+            self.goal_x, self.goal_y = self.respawn_goal.get_position(
+                goal_index=self.goal_index, delete=True
+            )
 
         self.goal_distance = self.get_goal_distance()
         state, _ = self.get_state(data)
 
         self.steps = 0
         self.had_collision = False  # Reset collision flag
-        self.goal_index = 0  # Reset goal index
+        self.goal_index = 0  # Reset goal index when resetting environment
 
         return np.asarray(state)
 

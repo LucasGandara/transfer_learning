@@ -95,32 +95,21 @@ class RespawnGoal(object):
             else:
                 pass
 
-    def get_position(self, position_check=False, delete=False):
+    def get_position(self, position_check=False, delete=False, goal_index=0):
         if delete:
             self.delete_model()
 
-        while position_check:
+        self.goal_position.position.x = GOAL_X_LIST[self.stage][goal_index]
+        self.goal_position.position.y = GOAL_Y_LIST[self.stage][goal_index]
+        self.goal_position.position.z = 0.11
 
-            self.goal_index += 1
-            if self.goal_index == len(GOAL_X_LIST[self.stage]):
-                self.goal_index = 0
-
-            rospy.loginfo("Goal position updating to: ...")
-            rospy.loginfo(
-                "Index: %d, X position: %d Y position: %d",
-                self.goal_index,
-                GOAL_X_LIST[self.stage][self.goal_index],
-                GOAL_Y_LIST[self.stage][self.goal_index],
-            )
-            if self.last_index == self.goal_index:
-                position_check = True
-            else:
-                self.last_index = self.goal_index
-                position_check = False
-
-            self.goal_position.position.x = GOAL_X_LIST[self.stage][self.goal_index]
-            self.goal_position.position.y = GOAL_Y_LIST[self.stage][self.goal_index]
-            self.goal_position.position.z = 0.11
+        rospy.loginfo("Goal position updating to: ...")
+        rospy.loginfo(
+            "Index: %d, X position: %d Y position: %d",
+            goal_index,
+            GOAL_X_LIST[self.stage][goal_index],
+            GOAL_Y_LIST[self.stage][goal_index],
+        )
 
         rospy.sleep(0.5)
         self.respawn_model()
