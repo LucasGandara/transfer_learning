@@ -3,7 +3,7 @@ load_model: false
 model_name: td3_tb3
 
 # Env
-stage: 0 # 0: main track, 1: tb3 world
+stage: 2 # 0: main track rigth, 1: tb3 world, 2: main track left
 
 # Reward function
 w_angular: 2.0

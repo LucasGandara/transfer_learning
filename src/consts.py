@@ -5,29 +5,34 @@ from enum import Enum
 
 def get_stage_name(stage: int):
     if stage == 0:
-        return "Main Track"
+        return "Main Track Right"
     elif stage == 1:
         return "TB3 World"
+    elif stage == 2:
+        return "Main Track Left"
     else:
         raise ValueError("Invalid stage")
 
 
 def get_stage(stage: int):
     if stage == 0:
-        return Stage.MAIN_TRACK
+        return Stage.MAIN_TRACK_RIGHT
     elif stage == 1:
         return Stage.TB3_WORLD
+    elif stage == 2:
+        return Stage.MAIN_TRACK_LEFT
     else:
         raise ValueError("Invalid stage")
 
 
 class Stage(Enum):
-    MAIN_TRACK = 0
+    MAIN_TRACK_RIGHT = 0
     TB3_WORLD = 1
+    MAIN_TRACK_LEFT = 2
 
 
 GOAL_X_LIST = {
-    Stage.MAIN_TRACK: [
+    Stage.MAIN_TRACK_RIGHT: [
         1.833015,
         2.833015,
         3.979241,
@@ -53,10 +58,18 @@ GOAL_X_LIST = {
         -0.1,
         -1.5,
     ],
+    Stage.MAIN_TRACK_LEFT: [
+        1.833015,
+        2.833015,
+        3.979241,
+        5.473178,
+        7.737311,
+        10.239666,
+    ],
 }
 
 GOAL_Y_LIST = {
-    Stage.MAIN_TRACK: [
+    Stage.MAIN_TRACK_RIGHT: [
         -0.490867,
         -0.490867,
         -0.841217,
@@ -81,6 +94,14 @@ GOAL_Y_LIST = {
         -1,
         1.6,
         -0.8,
+    ],
+    Stage.MAIN_TRACK_LEFT: [
+        0.490867,
+        0.490867,
+        0.841217,
+        1.775312,
+        0.471472,
+        0.494202,
     ],
 }
 

@@ -3,12 +3,16 @@
   <!-- RVIZ -->
   <arg name="rviz" default="false"/>
 
-
-  <!-- Turtlebot 3 Spawn coords -->
+  <!-- Side selection and spawn coordinates -->
+  <arg name="side" default="right" doc="robot start position [right, left]"/>
   <arg name="model" default="$(env TURTLEBOT3_MODEL)" doc="model type [burger, waffle, waffle_pi]"/>
-  <arg name="x_pos" default="0.516246"/>
-  <arg name="y_pos" default="-0.697190"/>
-  <arg name="z_pos" default="0.287165"/>
+  
+  <!-- Default spawn coordinates -->
+  <arg name="x_pos" value="0.516246"/>
+  <arg name="z_pos" value="0.287165"/>
+  
+  <!-- Set y position based on side -->
+  <arg name="y_pos" value="$(eval '-0.697190' if arg('side') == 'right' else '0.697190')"/>
 
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
     <arg name="world_name" value="$(find transfer_learning)/worlds/main_track_1.world"/>
@@ -20,7 +24,7 @@
   </include>
 
   <!-- Robot model as param -->
-  <param name="robot_description" command="$(find xacro)/xacro --inorder $(find turtlebot3_description)/urdf/turtlebot3_$(arg model).urdf.xacro" />
+  <param name="robot_description" command="$(find xacro)/xacro $(find turtlebot3_description)/urdf/turtlebot3_$(arg model).urdf.xacro" />
 
   <!-- Robot transformations -->
   <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
@@ -36,7 +40,8 @@
     type="rviz"
     args="-d $(find transfer_learning)/rviz/ddpg_tb3.rviz"
     output="log"
-    respawn="true" if="$(arg rviz)"
+    respawn="true"
+    if="$(arg rviz)"
   />
 
 </launch>
