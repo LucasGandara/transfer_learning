@@ -67,9 +67,9 @@ class Env(object):
         self.heading = 0
         self.position = Pose()
 
-        stage = get_stage(cfg["stage"])
+        self.stage = get_stage(cfg["stage"])
         rospy.loginfo("Environment stage: {}".format(get_stage_name(cfg["stage"])))
-        self.respawn_goal = RespawnGoal(stage)
+        self.respawn_goal = RespawnGoal(self.stage)
 
         # Topic publisher
         self.cmd_vel_publisher = rospy.Publisher("/cmd_vel", Twist, queue_size=5)
@@ -146,7 +146,7 @@ class Env(object):
             reward = 150
 
             # Check if we completed a full lap
-            if self.goal_index >= len(GOAL_X_LIST[self.respawn_goal.stage]):
+            if self.goal_index >= len(GOAL_X_LIST[self.stage]):
                 if not self.had_collision:
                     rospy.loginfo(
                         "Full lap completed without collisions! Extra reward +300!"
