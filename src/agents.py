@@ -508,12 +508,10 @@ class TD3Agent(Agent):
         self.target_critic_1 = None
         self.critic_2 = None
         self.target_critic_2 = None
-        self.actor_weights_name = (
-            f"{self.base_path}/{self.cfg['model_save_base_path']}/td3_actor.weights.h5"
-        )
+        self.actor_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/{self.cfg['actor_model_name']}.weights.h5"
 
-        self.critic_1_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/td3_critic_1.weights.h5"
-        self.critic_2_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/td3_critic_2.weights.h5"
+        self.critic_1_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/{self.cfg['critic_1_model_name']}.weights.h5"
+        self.critic_2_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/{self.cfg['critic_2_model_name']}.weights.h5"
         self.load_models()
 
     def load_models(self):
