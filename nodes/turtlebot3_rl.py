@@ -14,7 +14,7 @@ import yaml
 from gazebo_msgs.srv import DeleteModel, DeleteModelRequest
 
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-from src.agents import Agent, DDPGAgent, TD3Agent
+from src.agents import Agent, DDPGAgent, TD3Agent, TD3TLAgent
 from src.consts import timeit
 from src.tb3_environment import Env
 
@@ -149,6 +149,8 @@ if __name__ == "__main__":
         agent = DDPGAgent(env.state_size, env.action_size, cfg)
     elif agent == "TD3":
         agent = TD3Agent(env.state_size, env.action_size, cfg)
+    elif agent == "TD3TL":
+        agent = TD3TLAgent(env.state_size, env.action_size, cfg)
     else:
         rospy.logerr("Invalid agent type. Exiting...")
         exit(1)

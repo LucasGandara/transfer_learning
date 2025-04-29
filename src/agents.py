@@ -894,6 +894,484 @@ class TD3Agent(Agent):
         self.target_critic_2.save_weights(self.critic_2_weights_name)
 
 
+class TD3TLAgent(Agent):
+    def __init__(self, state_size, action_size, cfg):
+        self.state_size = state_size
+        self.action_size = action_size
+        self.cfg = cfg
+
+        # Logs
+        self.base_path = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
+        date_time = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
+        self.log_dir = (
+            f"{self.base_path}/{self.cfg['base_log_dir']}/td3tl_{date_time}_main_track"
+        )
+        print(f"Logging metrics to {self.log_dir}")
+        self.summary_writer = tf.summary.create_file_writer(self.log_dir)
+        self.episode_score = 0
+
+        # RL Agent
+        self.noise_std_deviation = self.cfg["std_dev"]
+        self.critic_lr = self.cfg["critic_lr"]
+        self.actor_lr = self.cfg["actor_lr"]
+        self.batch_size = self.cfg["batch_size"]
+        self.gamma = self.cfg["gamma"]
+        self.tau = self.cfg["tau"]
+        self.memory = ReplayBuffer(
+            self.cfg["memory_size"], self.state_size, self.action_size
+        )
+        self.train_epochs = 0
+        self.actor_loss_memory = 0
+        self.critic_loss_memory = 0
+        self.max_action_value: int = self.cfg["max_angular_vel"]
+        self.update_policy_frequency = 2
+        self.started_training = False
+
+        # Optimizers
+        self.actor_optimizer = keras.optimizers.Adam(learning_rate=self.actor_lr)
+        self.critic_1_optimizer = keras.optimizers.Adam(learning_rate=self.critic_lr)
+        self.critic_2_optimizer = keras.optimizers.Adam(learning_rate=self.critic_lr)
+
+        # Ros publishers
+        self.action_publisher = rospy.Publisher("/action", Float32, queue_size=5)
+        self.noisy_action_publisher = rospy.Publisher(
+            "/noisy_action", Float32, queue_size=5
+        )
+
+        # Load models
+        self.actor = None
+        self.target_actor = None
+        self.critic_1 = None
+        self.target_critic_1 = None
+        self.critic_2 = None
+        self.target_critic_2 = None
+        self.actor_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/{self.cfg['actor_model_name']}.weights.h5"
+
+        self.critic_1_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/{self.cfg['critic_1_model_name']}.weights.h5"
+        self.critic_2_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/{self.cfg['critic_2_model_name']}.weights.h5"
+
+        # Expert model names
+        self.expert_actor_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/{self.cfg['expert_actor_model_name']}.weights.h5"
+        self.expert_critic_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/{self.cfg['expert_critic_model_name']}.weights.h5"
+
+        self.load_models()
+
+    def load_models(self):
+        example_state_input = tf.random.uniform(
+            (self.cfg["batch_size"], self.state_size)
+        )  # Batch size of 1, random state input
+        example_action_input = tf.random.uniform(
+            (self.cfg["batch_size"], self.action_size)
+        )  # Batch size of 1, random action input
+
+        # Load the experts
+        self.expert_actor = create_actor_model(
+            (self.state_size,),
+            self.cfg["max_linear_vel"],
+            self.cfg["max_angular_vel"],
+            "expert_actor",
+        )
+        self.expert_actor(example_state_input)
+        self.expert_actor.load_weights(self.expert_actor_weights_name)
+
+        self.expert_critic = create_critic_model(
+            (self.state_size,), (self.action_size,), name="expert_critic"
+        )
+        self.expert_critic([example_state_input, example_action_input])
+        self.expert_critic.load_weights(self.expert_critic_weights_name)
+
+        # For td3 we need one actor and two critics
+        if self.cfg["load_model"]:
+            self.actor = create_actor_model(
+                (self.state_size,),
+                self.cfg["max_linear_vel"],
+                self.cfg["max_angular_vel"],
+                "actor",
+            )
+            self.target_actor = create_actor_model(
+                (self.state_size,),
+                self.cfg["max_linear_vel"],
+                self.cfg["max_angular_vel"],
+                "target_actor",
+            )
+            self.actor(example_state_input)
+            self.target_actor(example_state_input)
+            self.actor.load_weights(self.actor_weights_name)
+            self.target_actor.load_weights(self.actor_weights_name)
+
+            # 1st critic
+            self.critic_1 = create_critic_model(
+                (self.state_size,), (self.action_size,), name="critic_1"
+            )
+            self.target_critic_1 = create_critic_model(
+                (self.state_size,), (self.action_size,), name="target_critic_2"
+            )
+            self.critic_1([example_state_input, example_action_input])
+            self.target_critic_1([example_state_input, example_action_input])
+            self.critic_1.load_weights(self.critic_1_weights_name)
+            self.target_critic_1.load_weights(self.critic_1_weights_name)
+
+            # 2nd critic
+            self.critic_2 = create_critic_model(
+                (self.state_size,), (self.action_size,), name="critic_2"
+            )
+            self.target_critic_2 = create_critic_model(
+                (self.state_size,), (self.action_size,), name="target_critic_2"
+            )
+            self.critic_2([example_state_input, example_action_input])
+            self.target_critic_2([example_state_input, example_action_input])
+            self.critic_2.load_weights(self.critic_2_weights_name)
+            self.target_critic_2.load_weights(self.critic_2_weights_name)
+
+        else:
+            self.actor = create_actor_model(
+                (self.state_size,),
+                self.cfg["max_linear_vel"],
+                self.cfg["max_angular_vel"],
+                "actor",
+            )
+            self.target_actor = create_actor_model(
+                (self.state_size,),
+                self.cfg["max_linear_vel"],
+                self.cfg["max_angular_vel"],
+                "target_actor",
+            )
+
+            # 1st critic
+            self.critic_1 = create_critic_model(
+                (self.state_size,), (self.action_size,), name="critic_1"
+            )
+            self.target_critic_1 = create_critic_model(
+                (self.state_size,), (self.action_size,), name="target_critic_1"
+            )
+
+            # 2nd critic
+            self.critic_2 = create_critic_model(
+                (self.state_size,), (self.action_size,), name="critic_2"
+            )
+            self.target_critic_2 = create_critic_model(
+                (self.state_size,), (self.action_size,), name="target_critic_2"
+            )
+
+        # Copy weights
+        self.target_actor.set_weights(self.actor.get_weights())
+        self.target_critic_1.set_weights(self.critic_1.get_weights())
+        self.target_critic_2.set_weights(self.critic_2.get_weights())
+
+        self.actor(example_state_input)
+        print("\n")
+        self.actor.summary()
+        print("\n")
+
+        self.critic_1([example_state_input, example_action_input])
+        print("\n")
+        self.critic_1.summary()
+        print("\n")
+
+        self.critic_2([example_state_input, example_action_input])
+        print("\n")
+        self.critic_2.summary()
+        print("\n")
+
+        self.plot_models()
+
+    def get_action(self, state, training=True):
+        action = self.actor(state, training=training)
+
+        action_msg = Float32()
+        action_msg.data = action.numpy()[0]
+        self.action_publisher.publish(action_msg)
+
+        # Paper states to use Ornstein-Uhlenbeck noise  (https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process)
+        # White noise is enough
+        noise = tf.random.normal((self.action_size,), 0.0, self.noise_std_deviation)
+        noise = tf.clip_by_value(noise, -0.5, 0.5)
+        noisy_action = action + noise
+        noisy_action = tf.clip_by_value(
+            noisy_action, -self.max_action_value, self.max_action_value
+        )[0]
+
+        noisy_action_msg = Float32()
+        noisy_action_msg.data = noisy_action
+        self.noisy_action_publisher.publish(noisy_action_msg)
+
+        return noisy_action
+
+    def store_transition(self, state, action, reward, new_state, done):
+        self.memory.store_transition(state, action, reward, new_state, done)
+
+    def learn(self):
+        if self.memory.buffer_counter > self.cfg["batch_size"]:
+            if not self.started_training:
+                self.started_training = True
+                print("Training started")
+
+            states, actions, rewards, next_states, dones = self.memory.sample_buffer(
+                self.batch_size
+            )
+
+            self.train_step(states, actions, rewards, next_states, dones)
+            self.train_epochs += 1
+
+    # @tf.function
+    def train_step(self, states, actions, rewards, next_states, dones):
+        critic_loss, actor_loss = 0.0, 0.0
+        expert_critic_loss = 0.0
+        # Update critics
+
+        # Expert critics
+        with tf.GradientTape() as expert_critic_tape:
+
+            Vwt = self.expert_critic([states, actions], training=True)
+
+            expert_actions = self.expert_actor(states, training=True)
+            Qw = self.expert_critic([states, expert_actions], training=True)
+
+            expert_loss = self.gamma * (Qw - Vwt)
+
+        expert_critic_gradients = expert_critic_tape.gradient(
+            expert_loss, self.expert_critic.trainable_variables
+        )
+
+        expert_critic_gradients_norm = tf.linalg.global_norm(expert_critic_gradients)
+        tf.summary.scalar(
+            "Expert Critic Gradients Norm",
+            expert_critic_gradients_norm,
+            step=self.train_epochs,
+        )
+
+        # Agent critics
+        with tf.GradientTape() as critic_tape:
+            target_actions = self.target_actor(next_states, training=True)
+
+            # Target policy smoothing - Add noise to target actions
+            noise = tf.clip_by_value(
+                tf.random.normal((self.action_size,), 0.0, self.noise_std_deviation),
+                -0.5,
+                0.5,
+            )
+            noisy_target_actions = tf.clip_by_value(
+                target_actions + noise, -self.max_action_value, self.max_action_value
+            )
+
+            # Get target Q-values from both critics
+            target_q1 = self.target_critic_1(
+                [next_states, noisy_target_actions], training=True
+            )
+            target_q2 = self.target_critic_2(
+                [next_states, noisy_target_actions], training=True
+            )
+
+            # Use minimum of two Q-values to prevent overestimation
+            min_target_q = tf.minimum(target_q1, target_q2)
+
+            # Compute target values
+            y = rewards + self.gamma * (1 - dones) * min_target_q
+
+            # Current Q-values from both critics
+            current_q1 = self.critic_1([states, actions], training=True)
+            current_q2 = self.critic_2([states, actions], training=True)
+
+            # Compute MSE loss for both critics
+            critic_loss = keras.ops.mean(
+                keras.ops.square(y - current_q1)
+            ) + keras.ops.mean(keras.ops.square(y - current_q2))
+
+            # Log metrics
+            tf.summary.scalar(
+                "Target Q1 Mean", tf.reduce_mean(target_q1), step=self.train_epochs
+            )
+            tf.summary.scalar(
+                "Target Q2 Mean", tf.reduce_mean(target_q2), step=self.train_epochs
+            )
+            tf.summary.scalar(
+                "Current Q1 Mean", tf.reduce_mean(current_q1), step=self.train_epochs
+            )
+            tf.summary.scalar(
+                "Current Q2 Mean", tf.reduce_mean(current_q2), step=self.train_epochs
+            )
+            tf.summary.scalar(
+                "Q Value Difference",
+                tf.reduce_mean(tf.abs(current_q1 - current_q2)),
+                step=self.train_epochs,
+            )
+            tf.summary.scalar(
+                "Target Policy Noise", tf.reduce_mean(noise), step=self.train_epochs
+            )
+            tf.summary.histogram("Q1 Distribution", current_q1, step=self.train_epochs)
+            tf.summary.histogram("Q2 Distribution", current_q2, step=self.train_epochs)
+
+        critic_gradients = critic_tape.gradient(
+            expert_critic_loss,
+            self.critic_1.trainable_variables + self.critic_2.trainable_variables,
+        )
+
+        # Log critic gradient norms
+        critic_1_grad_norm = tf.linalg.global_norm(
+            critic_gradients[: len(self.critic_1.trainable_variables)]
+        )
+        critic_2_grad_norm = tf.linalg.global_norm(
+            critic_gradients[len(self.critic_1.trainable_variables) :]
+        )
+        tf.summary.scalar(
+            "Critic 1 Gradient Norm", critic_1_grad_norm, step=self.train_epochs
+        )
+        tf.summary.scalar(
+            "Critic 2 Gradient Norm", critic_2_grad_norm, step=self.train_epochs
+        )
+
+        # Apply the sum of the gradients
+        self.critic_1_optimizer.apply_gradients(
+            zip(
+                critic_gradients[: len(self.critic_1.trainable_variables)]
+                + expert_critic_gradients,
+                self.critic_1.trainable_variables,
+            )
+        )
+        self.critic_2_optimizer.apply_gradients(
+            zip(
+                critic_gradients[len(self.critic_1.trainable_variables) :]
+                + expert_critic_gradients,
+                self.critic_2.trainable_variables,
+            )
+        )
+
+        # Update the Actor if it's time (delayed policy updates)
+        if self.train_epochs % self.update_policy_frequency == 0:
+            with tf.GradientTape() as actor_tape:
+                # Get actions from current policy
+                policy_actions = self.actor(states, training=True)
+                # Actor loss is negative of Q1 values
+                actor_loss = -tf.math.reduce_mean(
+                    self.critic_1([states, policy_actions], training=True)
+                )
+
+                # Log actor-specific metrics
+                tf.summary.scalar(
+                    "Policy Actions Mean",
+                    tf.reduce_mean(policy_actions),
+                    step=self.train_epochs,
+                )
+                tf.summary.histogram(
+                    "Policy Actions Distribution",
+                    policy_actions,
+                    step=self.train_epochs,
+                )
+
+            actor_grads = actor_tape.gradient(
+                actor_loss, self.actor.trainable_variables
+            )
+
+            # Log actor gradient norm
+            actor_grad_norm = tf.linalg.global_norm(actor_grads)
+            tf.summary.scalar(
+                "Actor Gradient Norm", actor_grad_norm, step=self.train_epochs
+            )
+
+            self.actor_optimizer.apply_gradients(
+                zip(actor_grads, self.actor.trainable_variables)
+            )
+
+            return critic_loss, actor_loss
+
+        return critic_loss, 0.0
+
+    def update_targets(self):
+        """
+        This update target networks slowly
+        """
+
+        # Target actor update
+        actor_target_weights = self.target_actor.get_weights()
+        actor_current_weights = self.actor.get_weights()
+
+        for i in range(len(actor_target_weights)):
+            actor_target_weights[i] = (
+                self.tau * actor_current_weights[i]
+                + (1 - self.tau) * actor_target_weights[i]
+            )
+
+        self.target_actor.set_weights(actor_target_weights)
+
+        # Target critic update
+        critic_target_weights_1 = self.target_critic_1.get_weights()
+        critic_current_weights_1 = self.critic_1.get_weights()
+
+        for i in range(len(critic_target_weights_1)):
+            critic_target_weights_1[i] = (
+                self.tau * critic_current_weights_1[i]
+                + (1 - self.tau) * critic_target_weights_1[i]
+            )
+
+        self.target_critic_1.set_weights(critic_target_weights_1)
+
+        critic_target_weights_2 = self.target_critic_2.get_weights()
+        critic_current_weights_2 = self.critic_2.get_weights()
+
+        for i in range(len(critic_target_weights_2)):
+            critic_target_weights_2[i] = (
+                self.tau * critic_current_weights_2[i]
+                + (1 - self.tau) * critic_target_weights_2[i]
+            )
+
+        self.target_critic_2.set_weights(critic_target_weights_2)
+
+    def plot_models(self):
+        actor_model_path = (
+            f"{self.base_path}/{self.cfg['model_save_base_path']}/actor_model.png"
+        )
+        critic_1_model_path = (
+            f"{self.base_path}/{self.cfg['model_save_base_path']}/critic_1_model.png"
+        )
+        critic_2_model_path = (
+            f"{self.base_path}/{self.cfg['model_save_base_path']}/critic_2_model.png"
+        )
+
+        keras.utils.plot_model(
+            self.actor,
+            to_file=actor_model_path,
+            show_shapes=True,
+            show_layer_names=True,
+        )
+
+        keras.utils.plot_model(
+            self.critic_1,
+            to_file=critic_1_model_path,
+            show_shapes=True,
+            show_layer_names=True,
+        )
+
+        keras.utils.plot_model(
+            self.critic_2,
+            to_file=critic_2_model_path,
+            show_shapes=True,
+            show_layer_names=True,
+        )
+
+        actor_model_img = mpimg.imread(actor_model_path)
+        critic_1_model_img = mpimg.imread(critic_1_model_path)
+        critic_2_model_img = mpimg.imread(critic_2_model_path)
+
+        with self.summary_writer.as_default():
+            tf.summary.image(
+                "Actor Model", tf.expand_dims(actor_model_img, axis=0), step=0
+            )
+            tf.summary.image(
+                "Critic 1 Model", tf.expand_dims(critic_1_model_img, axis=0), step=0
+            )
+            tf.summary.image(
+                "Critic 2 Model", tf.expand_dims(critic_2_model_img, axis=0), step=0
+            )
+
+    def save_weights(self):
+        self.target_actor.save_weights(
+            self.actor_weights_name,
+            True,
+        )
+        self.target_critic_1.save_weights(self.critic_1_weights_name)
+        self.target_critic_2.save_weights(self.critic_2_weights_name)
+
+
 if __name__ == "__main__":
     import os
 
