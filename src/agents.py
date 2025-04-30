@@ -1164,6 +1164,21 @@ class TD3TLAgent(Agent):
     def train_step(self, states, actions, rewards, next_states, dones):
         critic_loss, actor_loss = 0.0, 0.0
 
+        # Expert critic loss
+        with tf.GradientTape() as expert_critic_tape:
+            expert_actions = self.expert_actor(next_states, training=True)
+
+            Qw = self.expert_critic([next_states, expert_actions], training=True)
+
+            Vwt = self.expert_critic([states, actions], training=True)
+
+            expert_critic_loss = self.gamma * (Qw - Vwt)
+
+        expert_critic_gradients = expert_critic_tape.gradient(
+            expert_critic_loss,
+            self.expert_critic.trainable_variables,
+        )
+
         # Update critics
         with tf.GradientTape() as critic_tape:
             target_actions = self.target_actor(next_states, training=True)
@@ -1216,13 +1231,15 @@ class TD3TLAgent(Agent):
 
         self.critic_1_optimizer.apply_gradients(
             zip(
-                critic_gradients[: len(self.critic_1.trainable_variables)],
+                critic_gradients[: len(self.critic_1.trainable_variables)]
+                + expert_critic_gradients,
                 self.critic_1.trainable_variables,
             )
         )
         self.critic_2_optimizer.apply_gradients(
             zip(
-                critic_gradients[len(self.critic_1.trainable_variables) :],
+                critic_gradients[len(self.critic_1.trainable_variables) :]
+                + expert_critic_gradients,
                 self.critic_2.trainable_variables,
             )
         )
