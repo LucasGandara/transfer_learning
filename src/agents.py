@@ -629,41 +629,197 @@ class TD3Agent(Agent):
         noise = tf.random.normal((self.action_size,), 0.0, self.noise_std_deviation)
         noise = tf.clip_by_value(noise, -0.5, 0.5)
         noisy_action = action + noise
-        noisy_action = tf.clip_by_value(
-            noisy_action, -self.max_action_value, self.max_action_value
-        )[0]
 
         noisy_action_msg = Float32()
         noisy_action_msg.data = noisy_action
         self.noisy_action_publisher.publish(noisy_action_msg)
 
-        return noisy_action
+        return tf.clip_by_value(
+            noisy_action, -self.cfg["max_angular_vel"], self.cfg["max_angular_vel"]
+        )[0]
 
     def store_transition(self, state, action, reward, new_state, done):
         self.memory.store_transition(state, action, reward, new_state, done)
 
     def learn(self):
         if self.memory.buffer_counter > self.cfg["batch_size"]:
-
             if not self.started_training:
-                print("Training started")
                 self.started_training = True
+                print("Training started")
 
             states, actions, rewards, next_states, dones = self.memory.sample_buffer(
                 self.batch_size
             )
 
-            critic_loss, actor_loss = self.train_step(
-                states, actions, rewards, next_states, dones
-            )
+            metrics = self.train_step(states, actions, rewards, next_states, dones)
             self.train_epochs += 1
 
-            self.critic_loss_memory += critic_loss.numpy()
-            self.actor_loss_memory += actor_loss.numpy()
+            # Log all metrics from train_step
+            if self.train_epochs % self.update_policy_frequency == 0:
+                # Unpack metrics
+                (
+                    critic_loss,
+                    actor_loss,
+                    target_q1,
+                    target_q2,
+                    current_q1,
+                    current_q2,
+                    noise,
+                    policy_actions,
+                    critic_1_grad_norm,
+                    critic_2_grad_norm,
+                    actor_grad_norm,
+                ) = metrics
+
+                # Log metrics in summary writer context
+                with self.summary_writer.as_default():
+                    # Critic metrics
+                    tf.summary.scalar(
+                        "Target Q1 Mean",
+                        tf.reduce_mean(target_q1),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Target Q2 Mean",
+                        tf.reduce_mean(target_q2),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Current Q1 Mean",
+                        tf.reduce_mean(current_q1),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Current Q2 Mean",
+                        tf.reduce_mean(current_q2),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Q Value Difference",
+                        tf.reduce_mean(tf.abs(current_q1 - current_q2)),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Target Policy Noise",
+                        tf.reduce_mean(noise),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.histogram(
+                        "Q1 Distribution", current_q1, step=self.train_epochs
+                    )
+                    tf.summary.histogram(
+                        "Q2 Distribution", current_q2, step=self.train_epochs
+                    )
+
+                    # Gradient norm metrics
+                    tf.summary.scalar(
+                        "Critic 1 Gradient Norm",
+                        critic_1_grad_norm,
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Critic 2 Gradient Norm",
+                        critic_2_grad_norm,
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Actor Gradient Norm", actor_grad_norm, step=self.train_epochs
+                    )
+
+                    # Actor metrics
+                    tf.summary.scalar(
+                        "Policy Actions Mean",
+                        tf.reduce_mean(policy_actions),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.histogram(
+                        "Policy Actions Distribution",
+                        policy_actions,
+                        step=self.train_epochs,
+                    )
+            else:
+                # Unpack metrics for non-actor update steps
+                (
+                    critic_loss,
+                    _,
+                    target_q1,
+                    target_q2,
+                    current_q1,
+                    current_q2,
+                    noise,
+                    _,
+                    critic_1_grad_norm,
+                    critic_2_grad_norm,
+                    _,
+                ) = metrics
+
+                # Log critic metrics only
+                with self.summary_writer.as_default():
+                    tf.summary.scalar(
+                        "Target Q1 Mean",
+                        tf.reduce_mean(target_q1),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Target Q2 Mean",
+                        tf.reduce_mean(target_q2),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Current Q1 Mean",
+                        tf.reduce_mean(current_q1),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Current Q2 Mean",
+                        tf.reduce_mean(current_q2),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Q Value Difference",
+                        tf.reduce_mean(tf.abs(current_q1 - current_q2)),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Target Policy Noise",
+                        tf.reduce_mean(noise),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.histogram(
+                        "Q1 Distribution", current_q1, step=self.train_epochs
+                    )
+                    tf.summary.histogram(
+                        "Q2 Distribution", current_q2, step=self.train_epochs
+                    )
+                    tf.summary.scalar(
+                        "Critic 1 Gradient Norm",
+                        critic_1_grad_norm,
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Critic 2 Gradient Norm",
+                        critic_2_grad_norm,
+                        step=self.train_epochs,
+                    )
 
     @tf.function
     def train_step(self, states, actions, rewards, next_states, dones):
         critic_loss, actor_loss = 0.0, 0.0
+
+        # Expert critic loss
+        with tf.GradientTape() as expert_critic_tape:
+            expert_actions = self.expert_actor(next_states, training=True)
+
+            Qw = self.expert_critic([next_states, expert_actions], training=True)
+
+            Vwt = self.expert_critic([states, actions], training=True)
+
+            expert_critic_loss = self.gamma * (Qw - Vwt)
+
+        expert_critic_gradients = expert_critic_tape.gradient(
+            expert_critic_loss,
+            self.expert_critic.trainable_variables,
+        )
 
         # Update critics
         with tf.GradientTape() as critic_tape:
@@ -717,16 +873,22 @@ class TD3Agent(Agent):
 
         self.critic_1_optimizer.apply_gradients(
             zip(
-                critic_gradients[: len(self.critic_1.trainable_variables)],
+                critic_gradients[: len(self.critic_1.trainable_variables)]
+                + expert_critic_gradients,
                 self.critic_1.trainable_variables,
             )
         )
         self.critic_2_optimizer.apply_gradients(
             zip(
-                critic_gradients[len(self.critic_1.trainable_variables) :],
+                critic_gradients[len(self.critic_1.trainable_variables) :]
+                + expert_critic_gradients,
                 self.critic_2.trainable_variables,
             )
         )
+
+        # Default actor-related metrics
+        policy_actions = tf.zeros_like(actions)
+        actor_grad_norm = tf.constant(0.0)
 
         # Update the Actor if it's time (delayed policy updates)
         if self.train_epochs % self.update_policy_frequency == 0:
@@ -749,100 +911,20 @@ class TD3Agent(Agent):
                 zip(actor_grads, self.actor.trainable_variables)
             )
 
-            # Log all metrics in summary writer context
-            with self.summary_writer.as_default():
-                # Critic metrics
-                tf.summary.scalar(
-                    "Target Q1 Mean", tf.reduce_mean(target_q1), step=self.train_epochs
-                )
-                tf.summary.scalar(
-                    "Target Q2 Mean", tf.reduce_mean(target_q2), step=self.train_epochs
-                )
-                tf.summary.scalar(
-                    "Current Q1 Mean",
-                    tf.reduce_mean(current_q1),
-                    step=self.train_epochs,
-                )
-                tf.summary.scalar(
-                    "Current Q2 Mean",
-                    tf.reduce_mean(current_q2),
-                    step=self.train_epochs,
-                )
-                tf.summary.scalar(
-                    "Q Value Difference",
-                    tf.reduce_mean(tf.abs(current_q1 - current_q2)),
-                    step=self.train_epochs,
-                )
-                tf.summary.scalar(
-                    "Target Policy Noise", tf.reduce_mean(noise), step=self.train_epochs
-                )
-                tf.summary.histogram(
-                    "Q1 Distribution", current_q1, step=self.train_epochs
-                )
-                tf.summary.histogram(
-                    "Q2 Distribution", current_q2, step=self.train_epochs
-                )
-
-                # Gradient norm metrics
-                tf.summary.scalar(
-                    "Critic 1 Gradient Norm", critic_1_grad_norm, step=self.train_epochs
-                )
-                tf.summary.scalar(
-                    "Critic 2 Gradient Norm", critic_2_grad_norm, step=self.train_epochs
-                )
-                tf.summary.scalar(
-                    "Actor Gradient Norm", actor_grad_norm, step=self.train_epochs
-                )
-
-                # Actor metrics
-                tf.summary.scalar(
-                    "Policy Actions Mean",
-                    tf.reduce_mean(policy_actions),
-                    step=self.train_epochs,
-                )
-                tf.summary.histogram(
-                    "Policy Actions Distribution",
-                    policy_actions,
-                    step=self.train_epochs,
-                )
-
-            return critic_loss, actor_loss
-
-        # If not updating actor, still log critic metrics
-        with self.summary_writer.as_default():
-            # Critic metrics
-            tf.summary.scalar(
-                "Target Q1 Mean", tf.reduce_mean(target_q1), step=self.train_epochs
-            )
-            tf.summary.scalar(
-                "Target Q2 Mean", tf.reduce_mean(target_q2), step=self.train_epochs
-            )
-            tf.summary.scalar(
-                "Current Q1 Mean", tf.reduce_mean(current_q1), step=self.train_epochs
-            )
-            tf.summary.scalar(
-                "Current Q2 Mean", tf.reduce_mean(current_q2), step=self.train_epochs
-            )
-            tf.summary.scalar(
-                "Q Value Difference",
-                tf.reduce_mean(tf.abs(current_q1 - current_q2)),
-                step=self.train_epochs,
-            )
-            tf.summary.scalar(
-                "Target Policy Noise", tf.reduce_mean(noise), step=self.train_epochs
-            )
-            tf.summary.histogram("Q1 Distribution", current_q1, step=self.train_epochs)
-            tf.summary.histogram("Q2 Distribution", current_q2, step=self.train_epochs)
-
-            # Gradient norm metrics
-            tf.summary.scalar(
-                "Critic 1 Gradient Norm", critic_1_grad_norm, step=self.train_epochs
-            )
-            tf.summary.scalar(
-                "Critic 2 Gradient Norm", critic_2_grad_norm, step=self.train_epochs
-            )
-
-        return critic_loss, 0.0
+        # Return all metrics needed for logging
+        return (
+            critic_loss,
+            actor_loss,
+            target_q1,
+            target_q2,
+            current_q1,
+            current_q2,
+            noise,
+            policy_actions,
+            critic_1_grad_norm,
+            critic_2_grad_norm,
+            actor_grad_norm,
+        )
 
     def update_targets(self):
         """
@@ -1148,7 +1230,6 @@ class TD3TLAgent(Agent):
 
     def learn(self):
         if self.memory.buffer_counter > self.cfg["batch_size"]:
-
             if not self.started_training:
                 self.started_training = True
                 print("Training started")
@@ -1157,8 +1238,156 @@ class TD3TLAgent(Agent):
                 self.batch_size
             )
 
-            self.train_step(states, actions, rewards, next_states, dones)
+            metrics = self.train_step(states, actions, rewards, next_states, dones)
             self.train_epochs += 1
+
+            # Log all metrics from train_step
+            if self.train_epochs % self.update_policy_frequency == 0:
+                # Unpack metrics
+                (
+                    critic_loss,
+                    actor_loss,
+                    target_q1,
+                    target_q2,
+                    current_q1,
+                    current_q2,
+                    noise,
+                    policy_actions,
+                    critic_1_grad_norm,
+                    critic_2_grad_norm,
+                    actor_grad_norm,
+                ) = metrics
+
+                # Log metrics in summary writer context
+                with self.summary_writer.as_default():
+                    # Critic metrics
+                    tf.summary.scalar(
+                        "Target Q1 Mean",
+                        tf.reduce_mean(target_q1),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Target Q2 Mean",
+                        tf.reduce_mean(target_q2),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Current Q1 Mean",
+                        tf.reduce_mean(current_q1),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Current Q2 Mean",
+                        tf.reduce_mean(current_q2),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Q Value Difference",
+                        tf.reduce_mean(tf.abs(current_q1 - current_q2)),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Target Policy Noise",
+                        tf.reduce_mean(noise),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.histogram(
+                        "Q1 Distribution", current_q1, step=self.train_epochs
+                    )
+                    tf.summary.histogram(
+                        "Q2 Distribution", current_q2, step=self.train_epochs
+                    )
+
+                    # Gradient norm metrics
+                    tf.summary.scalar(
+                        "Critic 1 Gradient Norm",
+                        critic_1_grad_norm,
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Critic 2 Gradient Norm",
+                        critic_2_grad_norm,
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Actor Gradient Norm", actor_grad_norm, step=self.train_epochs
+                    )
+
+                    # Actor metrics
+                    tf.summary.scalar(
+                        "Policy Actions Mean",
+                        tf.reduce_mean(policy_actions),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.histogram(
+                        "Policy Actions Distribution",
+                        policy_actions,
+                        step=self.train_epochs,
+                    )
+            else:
+                # Unpack metrics for non-actor update steps
+                (
+                    critic_loss,
+                    _,
+                    target_q1,
+                    target_q2,
+                    current_q1,
+                    current_q2,
+                    noise,
+                    _,
+                    critic_1_grad_norm,
+                    critic_2_grad_norm,
+                    _,
+                ) = metrics
+
+                # Log critic metrics only
+                with self.summary_writer.as_default():
+                    tf.summary.scalar(
+                        "Target Q1 Mean",
+                        tf.reduce_mean(target_q1),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Target Q2 Mean",
+                        tf.reduce_mean(target_q2),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Current Q1 Mean",
+                        tf.reduce_mean(current_q1),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Current Q2 Mean",
+                        tf.reduce_mean(current_q2),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Q Value Difference",
+                        tf.reduce_mean(tf.abs(current_q1 - current_q2)),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Target Policy Noise",
+                        tf.reduce_mean(noise),
+                        step=self.train_epochs,
+                    )
+                    tf.summary.histogram(
+                        "Q1 Distribution", current_q1, step=self.train_epochs
+                    )
+                    tf.summary.histogram(
+                        "Q2 Distribution", current_q2, step=self.train_epochs
+                    )
+                    tf.summary.scalar(
+                        "Critic 1 Gradient Norm",
+                        critic_1_grad_norm,
+                        step=self.train_epochs,
+                    )
+                    tf.summary.scalar(
+                        "Critic 2 Gradient Norm",
+                        critic_2_grad_norm,
+                        step=self.train_epochs,
+                    )
 
     @tf.function
     def train_step(self, states, actions, rewards, next_states, dones):
@@ -1244,6 +1473,10 @@ class TD3TLAgent(Agent):
             )
         )
 
+        # Default actor-related metrics
+        policy_actions = tf.zeros_like(actions)
+        actor_grad_norm = tf.constant(0.0)
+
         # Update the Actor if it's time (delayed policy updates)
         if self.train_epochs % self.update_policy_frequency == 0:
             with tf.GradientTape() as actor_tape:
@@ -1265,100 +1498,20 @@ class TD3TLAgent(Agent):
                 zip(actor_grads, self.actor.trainable_variables)
             )
 
-            # Log all metrics in summary writer context
-            with self.summary_writer.as_default():
-                # Critic metrics
-                tf.summary.scalar(
-                    "Target Q1 Mean", tf.reduce_mean(target_q1), step=self.train_epochs
-                )
-                tf.summary.scalar(
-                    "Target Q2 Mean", tf.reduce_mean(target_q2), step=self.train_epochs
-                )
-                tf.summary.scalar(
-                    "Current Q1 Mean",
-                    tf.reduce_mean(current_q1),
-                    step=self.train_epochs,
-                )
-                tf.summary.scalar(
-                    "Current Q2 Mean",
-                    tf.reduce_mean(current_q2),
-                    step=self.train_epochs,
-                )
-                tf.summary.scalar(
-                    "Q Value Difference",
-                    tf.reduce_mean(tf.abs(current_q1 - current_q2)),
-                    step=self.train_epochs,
-                )
-                tf.summary.scalar(
-                    "Target Policy Noise", tf.reduce_mean(noise), step=self.train_epochs
-                )
-                tf.summary.histogram(
-                    "Q1 Distribution", current_q1, step=self.train_epochs
-                )
-                tf.summary.histogram(
-                    "Q2 Distribution", current_q2, step=self.train_epochs
-                )
-
-                # Gradient norm metrics
-                tf.summary.scalar(
-                    "Critic 1 Gradient Norm", critic_1_grad_norm, step=self.train_epochs
-                )
-                tf.summary.scalar(
-                    "Critic 2 Gradient Norm", critic_2_grad_norm, step=self.train_epochs
-                )
-                tf.summary.scalar(
-                    "Actor Gradient Norm", actor_grad_norm, step=self.train_epochs
-                )
-
-                # Actor metrics
-                tf.summary.scalar(
-                    "Policy Actions Mean",
-                    tf.reduce_mean(policy_actions),
-                    step=self.train_epochs,
-                )
-                tf.summary.histogram(
-                    "Policy Actions Distribution",
-                    policy_actions,
-                    step=self.train_epochs,
-                )
-
-            return critic_loss, actor_loss
-
-        # If not updating actor, still log critic metrics
-        with self.summary_writer.as_default():
-            # Critic metrics
-            tf.summary.scalar(
-                "Target Q1 Mean", tf.reduce_mean(target_q1), step=self.train_epochs
-            )
-            tf.summary.scalar(
-                "Target Q2 Mean", tf.reduce_mean(target_q2), step=self.train_epochs
-            )
-            tf.summary.scalar(
-                "Current Q1 Mean", tf.reduce_mean(current_q1), step=self.train_epochs
-            )
-            tf.summary.scalar(
-                "Current Q2 Mean", tf.reduce_mean(current_q2), step=self.train_epochs
-            )
-            tf.summary.scalar(
-                "Q Value Difference",
-                tf.reduce_mean(tf.abs(current_q1 - current_q2)),
-                step=self.train_epochs,
-            )
-            tf.summary.scalar(
-                "Target Policy Noise", tf.reduce_mean(noise), step=self.train_epochs
-            )
-            tf.summary.histogram("Q1 Distribution", current_q1, step=self.train_epochs)
-            tf.summary.histogram("Q2 Distribution", current_q2, step=self.train_epochs)
-
-            # Gradient norm metrics
-            tf.summary.scalar(
-                "Critic 1 Gradient Norm", critic_1_grad_norm, step=self.train_epochs
-            )
-            tf.summary.scalar(
-                "Critic 2 Gradient Norm", critic_2_grad_norm, step=self.train_epochs
-            )
-
-        return critic_loss, 0.0
+        # Return all metrics needed for logging
+        return (
+            critic_loss,
+            actor_loss,
+            target_q1,
+            target_q2,
+            current_q1,
+            current_q2,
+            noise,
+            policy_actions,
+            critic_1_grad_norm,
+            critic_2_grad_norm,
+            actor_grad_norm,
+        )
 
     def update_targets(self):
         """
