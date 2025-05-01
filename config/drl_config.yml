@@ -2,9 +2,13 @@
 load_model: false
 
 # Model Names
-actor_model_name: td3_expert_actor_right_main_track
-critic_1_model_name: td3_expert_critic_1_right_main_track
-critic_2_model_name: td3_expert_critic_2_right_main_track
+td3_base_actor_model_name: td3_base_actor_right_main_track
+td3_base_critic_1_model_name: td3_base_critic_1_right_main_track
+td3_base_critic_2_model_name: td3_base_critic_2_right_main_track
+
+actor_model_name: td3_actor_right_main_track
+critic_1_model_name: td3_critic_1_right_main_track
+critic_2_model_name: td3_critic_2_right_main_track
 
 expert_actor_model_name: td3_expert_actor_right_main_track
 expert_critic_model_name: td3_expert_critic_1_right_main_track
@@ -18,7 +22,7 @@ w_distance: 3.0
 alpha_reward: 0.5
 
 # DRL Agent
-agent: TD3TL
+agent: TD3
 critic_lr: 0.005
 actor_lr: 0.001
 gamma: 0.99

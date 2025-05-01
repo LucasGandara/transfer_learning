@@ -509,10 +509,13 @@ class TD3Agent(Agent):
         self.target_critic_1 = None
         self.critic_2 = None
         self.target_critic_2 = None
+        self.base_actor_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/{self.cfg['td3_base_actor_model_name']}.weights.h5"
         self.actor_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/{self.cfg['actor_model_name']}.weights.h5"
 
+        self.base_critic_1_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/{self.cfg['td3_base_critic_1_model_name']}.weights.h5"
         self.critic_1_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/{self.cfg['critic_1_model_name']}.weights.h5"
         self.critic_2_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/{self.cfg['critic_2_model_name']}.weights.h5"
+        self.base_critic_2_weights_name = f"{self.base_path}/{self.cfg['model_save_base_path']}/{self.cfg['td3_base_critic_2_model_name']}.weights.h5"
         self.load_models()
 
     def load_models(self):
@@ -578,6 +581,10 @@ class TD3Agent(Agent):
                 self.cfg["max_angular_vel"],
                 "target_actor",
             )
+            self.actor(example_state_input)
+            self.target_actor(example_state_input)
+            self.actor.load_weights(self.base_actor_weights_name)
+            self.actor.load_weights(self.base_actor_weights_name)
 
             # 1st critic
             self.critic_1 = create_critic_model(
@@ -586,6 +593,10 @@ class TD3Agent(Agent):
             self.target_critic_1 = create_critic_model(
                 (self.state_size,), (self.action_size,), name="target_critic_1"
             )
+            self.critic_1([example_state_input, example_action_input])
+            self.target_critic_1([example_state_input, example_action_input])
+            self.critic_1.load_weights(self.base_critic_1_weights_name)
+            self.target_critic_1.load_weights(self.base_critic_2_weights_name)
 
             # 2nd critic
             self.critic_2 = create_critic_model(
@@ -594,6 +605,10 @@ class TD3Agent(Agent):
             self.target_critic_2 = create_critic_model(
                 (self.state_size,), (self.action_size,), name="target_critic_2"
             )
+            self.critic_2([example_state_input, example_action_input])
+            self.target_critic_2([example_state_input, example_action_input])
+            self.critic_2.load_weights(self.base_critic_2_weights_name)
+            self.target_critic_2.load_weights(self.base_critic_2_weights_name)
 
         # Copy weights
         self.target_actor.set_weights(self.actor.get_weights())
@@ -802,24 +817,13 @@ class TD3Agent(Agent):
                         step=self.train_epochs,
                     )
 
+            (critic_loss, actor_loss) = metrics[:2]
+            self.critic_loss_memory += critic_loss.numpy()
+            self.actor_loss_memory += actor_loss.numpy()
+
     @tf.function
     def train_step(self, states, actions, rewards, next_states, dones):
         critic_loss, actor_loss = 0.0, 0.0
-
-        # Expert critic loss
-        with tf.GradientTape() as expert_critic_tape:
-            expert_actions = self.expert_actor(next_states, training=True)
-
-            Qw = self.expert_critic([next_states, expert_actions], training=True)
-
-            Vwt = self.expert_critic([states, actions], training=True)
-
-            expert_critic_loss = self.gamma * (Qw - Vwt)
-
-        expert_critic_gradients = expert_critic_tape.gradient(
-            expert_critic_loss,
-            self.expert_critic.trainable_variables,
-        )
 
         # Update critics
         with tf.GradientTape() as critic_tape:
@@ -873,15 +877,13 @@ class TD3Agent(Agent):
 
         self.critic_1_optimizer.apply_gradients(
             zip(
-                critic_gradients[: len(self.critic_1.trainable_variables)]
-                + expert_critic_gradients,
+                critic_gradients[: len(self.critic_1.trainable_variables)],
                 self.critic_1.trainable_variables,
             )
         )
         self.critic_2_optimizer.apply_gradients(
             zip(
-                critic_gradients[len(self.critic_1.trainable_variables) :]
-                + expert_critic_gradients,
+                critic_gradients[len(self.critic_1.trainable_variables) :],
                 self.critic_2.trainable_variables,
             )
         )
