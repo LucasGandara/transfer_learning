@@ -468,7 +468,7 @@ class TD3Agent(Agent):
         self.base_path = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
         date_time = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
         self.log_dir = (
-            f"{self.base_path}/{self.cfg['base_log_dir']}/td3_{date_time}_stage2"
+            f"{self.base_path}/{self.cfg['base_log_dir']}/td3_{date_time}_main_track"
         )
         print(f"Logging metrics to {self.log_dir}")
         self.summary_writer = tf.summary.create_file_writer(self.log_dir)

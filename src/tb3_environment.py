@@ -34,7 +34,7 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from src.consts import get_stage, get_stage_name
+    from src.consts import Stage, get_stage, get_stage_name
     from src.respawn_goal import RespawnGoal
     from src.reward_functions import combined_reward_function
 except ModuleNotFoundError:
@@ -82,6 +82,26 @@ class Env(object):
         # Topic subscriptions
         self.reset_proxy = rospy.ServiceProxy("gazebo/reset_simulation", Empty)
         rospy.Subscriber("odom", Odometry, self.odom_callback)
+        rospy.Subscriber("switch_side", Empty, self.switch_side_callback)
+
+    def switch_side_callback(self, _):
+        # Switch side of the track
+        if self.respawn_goal.stage == Stage.MAIN_TRACK_RIGHT:
+            self.stage = Stage.MAIN_TRACK_LEFT
+            self.respawn_goal.stage = self.stage
+            rospy.loginfo(f"Switching to {get_stage_name(self.stage)}")
+        elif self.stage == Stage.MAIN_TRACK_LEFT:
+            self.stage = Stage.MAIN_TRACK_RIGHT
+            self.respawn_goal.stage = self.stage
+            rospy.loginfo(f"Switching to {get_stage_name(self.stage)}")
+        else:
+            rospy.logerr("Invalid stage for switching sides")
+
+        # Reset goal index and respawn goal
+        self.goal_x, self.goal_y = self.respawn_goal.get_position(
+            goal_index=self.goal_index, delete=True
+        )
+        self.goal_distance = self.get_goal_distance()
 
     def odom_callback(self, odom: Odometry):
         self.position = odom.pose.pose.position

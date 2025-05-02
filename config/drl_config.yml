@@ -1,20 +1,22 @@
 # start or keep
 load_model: false
 
-# Model Names
-td3_base_actor_model_name: td3_base_actor_right_main_track
-td3_base_critic_1_model_name: td3_base_critic_1_right_main_track
-td3_base_critic_2_model_name: td3_base_critic_2_right_main_track
+# Base Model Names
+td3_base_actor_model_name: td3_expert_actor_right_main_track
+td3_base_critic_1_model_name: td3_expert_critic_1_right_main_track
+td3_base_critic_2_model_name: td3_expert_critic_2_right_main_track
 
-actor_model_name: td3_actor_right_main_track
-critic_1_model_name: td3_critic_1_right_main_track
-critic_2_model_name: td3_critic_2_right_main_track
+# Model Names (to save)
+actor_model_name: td3tl_actor_right_main_track
+critic_1_model_name: td3tl_critic_1_right_main_track
+critic_2_model_name: td3tl_critic_2_right_main_track
 
+# Expert Model Names (to load)
 expert_actor_model_name: td3_expert_actor_right_main_track
 expert_critic_model_name: td3_expert_critic_1_right_main_track
 
 # Env
-stage: 0 # 0: main track rigth, 1: tb3 world, 2: main track left
+stage: 2 # 0: main track rigth, 1: tb3 world, 2: main track left
 
 # Reward function
 w_angular: 2.0
@@ -31,7 +33,7 @@ std_dev: 0.2
 
 batch_size: 128
 current_episode: 0
-num_episodes: 200
+num_episodes: 140
 max_steps_per_episode: 500
 reward_decay_factor: 0.01
 episode_step: 200
