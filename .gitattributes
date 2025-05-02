@@ -1,2 +1,1 @@
-events.out.tfevents.1746151603.lucas.268285.0.v2 filter=lfs diff=lfs merge=lfs -text
 logs/** filter=lfs diff=lfs merge=lfs -text
