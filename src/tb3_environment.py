@@ -21,6 +21,7 @@ import rospy
 from geometry_msgs.msg import Pose, Twist
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan
+from std_msgs.msg import Empty as EmptyMsg
 from std_msgs.msg import Float32
 from std_srvs.srv import Empty
 from tf.transformations import euler_from_quaternion
@@ -82,20 +83,22 @@ class Env(object):
         # Topic subscriptions
         self.reset_proxy = rospy.ServiceProxy("gazebo/reset_simulation", Empty)
         rospy.Subscriber("odom", Odometry, self.odom_callback)
-        rospy.Subscriber("switch_side", Empty, self.switch_side_callback)
+        rospy.Subscriber("switch_side", EmptyMsg, self.switch_side_callback)
 
     def switch_side_callback(self, _):
         # Switch side of the track
-        if self.respawn_goal.stage == Stage.MAIN_TRACK_RIGHT:
-            self.stage = Stage.MAIN_TRACK_LEFT
-            self.respawn_goal.stage = self.stage
-            rospy.loginfo(f"Switching to {get_stage_name(self.stage)}")
-        elif self.stage == Stage.MAIN_TRACK_LEFT:
+        if self.respawn_goal.stage == Stage.MAIN_TRACK_LEFT:
             self.stage = Stage.MAIN_TRACK_RIGHT
             self.respawn_goal.stage = self.stage
-            rospy.loginfo(f"Switching to {get_stage_name(self.stage)}")
+            rospy.loginfo(f"Switching to {get_stage_name(0)}")
+        elif self.respawn_goal.stage == Stage.MAIN_TRACK_RIGHT:
+            self.stage = Stage.MAIN_TRACK_LEFT
+            self.respawn_goal.stage = self.stage
+            rospy.loginfo(f"Switching to {get_stage_name(2)}")
         else:
-            rospy.logerr("Invalid stage for switching sides")
+            rospy.logerr(
+                f"Invalid stage for switching sides, current stage: {self.stage}"
+            )
 
         # Reset goal index and respawn goal
         self.goal_x, self.goal_y = self.respawn_goal.get_position(
